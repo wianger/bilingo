@@ -31,7 +31,10 @@ jobs:
           npm run zip
           npm run zip:edge
           npm run build:safari
+          # upload-artifact 默认忽略隐藏目录（.output），先复制出来
+          mkdir -p dist && cp .output/*.zip dist/
       - uses: actions/upload-artifact@v7
         with:
           name: bilingo-extensions
-          path: .output/*.zip
+          path: dist/*.zip
+          if-no-files-found: error
