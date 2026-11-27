@@ -17,6 +17,20 @@ const PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>
   <p id="far">This paragraph is far below the fold.</p>
 </body></html>`;
 
+const LAYOUT_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>layout</title><style>
+  .card { width: 260px; height: 64px; overflow: hidden; border: 1px solid #ccc; }
+  .card h3 { margin: 0; font-size: 16px; line-height: 20px; }
+  .strip { display: flex; gap: 8px; width: 260px; height: 24px; overflow: hidden; white-space: nowrap; }
+</style></head><body>
+  <nav id="nav"><a href="#">Home page</a> <a href="#">About us</a></nav>
+  <div class="card" id="card"><h3 id="cardTitle">A fairly long card title that already fills the clamped box</h3>
+    <p id="cardBody">Card body text that is cut off by the fixed height.</p></div>
+  <div class="strip" id="strip"><span id="tab1">Most recent posts</span><span>Top rated posts</span></div>
+  <p id="para">A normal paragraph in the flow of the document.</p>
+  <p id="ident">useEffectHook</p>
+  <button id="btn">Load more comments</button>
+</body></html>`;
+
 let server: Server;
 let origin = '';
 const llmRequests: { segments?: { id: number; text: string }[]; text?: string }[] = [];
@@ -43,6 +57,10 @@ const test = base.extend<{ context: BrowserContext; sw: Worker }>({
 
 test.beforeAll(async () => {
   server = createServer((req, res) => {
+    if (req.url === '/layout') {
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      return res.end(LAYOUT_PAGE);
+    }
     if (req.url === '/page') {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       return res.end(PAGE);
@@ -176,4 +194,41 @@ test('float ball can be dragged, snaps to an edge and remembers its position', a
   // 没有移动的按下-松开仍是点击
   await ball2.click();
   await expect(ball2).toHaveClass(/\bon\b/);
+});
+
+test('translates only real content and never breaks fixed-size layouts', async ({ context, sw }) => {
+  await sw.evaluate(async (baseUrl) => {
+    await chrome.storage.local.set({
+      settings: { provider: 'openai', targetLang: 'zh-CN', openai: { baseUrl, apiKey: 'test', model: 'mock' } },
+    });
+  }, `${origin}/v1`);
+  const page = await context.newPage();
+  await page.goto(`${origin}/layout`);
+  const box = async (sel: string) => (await page.locator(sel).boundingBox())!;
+  const cardBefore = await box('#card');
+  const stripBefore = await box('#strip');
+
+  await page.locator('#bilingo-host').locator('.ball').click();
+  await expect(page.locator('#para .bilingo-tr')).toHaveText('【译】A normal paragraph in the flow of the document.');
+  // flex 容器里的每个标签单独翻译，不合并成一句
+  await expect(page.locator('#strip')).not.toHaveAttribute('data-bilingo');
+
+  // 界面元素与代码标识符不翻译
+  await expect(page.locator('#nav [data-bilingo]')).toHaveCount(0);
+  await expect(page.locator('#btn')).not.toHaveAttribute('data-bilingo');
+  await expect(page.locator('#ident')).not.toHaveAttribute('data-bilingo');
+
+  // 固定尺寸的卡片和标签条：放不下译文，改为悬停显示，布局尺寸保持不变
+  await expect(page.locator('#cardTitle')).toHaveAttribute('data-bilingo', 'hint');
+  await expect(page.locator('#tab1')).toHaveAttribute('data-bilingo', 'hint');
+  await expect(page.locator('#card .bilingo-tr, #strip .bilingo-tr')).toHaveCount(0);
+  expect(await box('#card')).toEqual(cardBefore);
+  expect(await box('#strip')).toEqual(stripBefore);
+
+  await page.locator('#cardTitle').hover();
+  const bubble = page.locator('#bilingo-host').locator('.bubble');
+  await expect(bubble).toBeVisible();
+  await expect(bubble.locator('.body')).toContainText('【译】A fairly long card title');
+  await page.locator('#para').hover();
+  await expect(bubble).toBeHidden();
 });

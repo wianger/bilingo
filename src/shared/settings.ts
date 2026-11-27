@@ -2,6 +2,8 @@ import { storage } from 'wxt/utils/storage';
 
 export type ProviderId = 'builtin' | 'local' | 'google' | 'azure' | 'deepl' | 'openai';
 export type TranslationStyle = 'plain' | 'faded' | 'underline' | 'highlight' | 'quote';
+/** smart：只译正文，跳过导航、菜单、按钮、页眉页脚等界面元素；all：页面上所有文字 */
+export type TranslateScope = 'smart' | 'all';
 
 export interface OpenAISettings {
   baseUrl: string;
@@ -20,6 +22,7 @@ export interface Settings {
   provider: ProviderId;
   targetLang: string;
   style: TranslationStyle;
+  scope: TranslateScope;
   floatBall: boolean;
   autoSites: string[];
   openai: OpenAISettings;
@@ -33,6 +36,7 @@ export const DEFAULT_SETTINGS: Settings = {
   provider: 'builtin',
   targetLang: 'zh-CN',
   style: 'faded',
+  scope: 'smart',
   floatBall: true,
   autoSites: [],
   openai: {

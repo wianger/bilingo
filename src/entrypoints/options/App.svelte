@@ -322,6 +322,21 @@
 
         <label class="row">
           <div>
+            <div>只翻译正文</div>
+            <div class="muted">
+              跳过导航栏、菜单、按钮、页眉页脚和代码标识符等，不翻译网页的“界面文字”。关闭后翻译页面上的所有文字
+            </div>
+          </div>
+          <input
+            type="checkbox"
+            class="switch"
+            checked={s.scope !== 'all'}
+            onchange={(e) => (s!.scope = e.currentTarget.checked ? 'smart' : 'all')}
+          />
+        </label>
+
+        <label class="row">
+          <div>
             <div>悬浮翻译按钮</div>
             <div class="muted">在网页边缘显示可拖动的“译”按钮</div>
           </div>

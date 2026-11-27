@@ -3,9 +3,46 @@ import { detectLanguage, translateBuiltin } from '@/shared/builtin';
 import { sameLanguage } from '@/shared/langs';
 import { sendMessage } from '@/shared/messaging';
 import { batchLimits, type Settings } from '@/shared/settings';
-import { collectSegments, getText, isOwnNode, preferInline, SKIP_CONTEXT, STATE_ATTR } from './segmenter';
+import {
+  collectSegments,
+  getText,
+  isOwnNode,
+  isVisuallyHidden,
+  preferInline,
+  SKIP_CONTEXT,
+  STATE_ATTR,
+} from './segmenter';
 
-type State = 'wait' | 'pending' | 'done' | 'same' | 'error';
+type State = 'wait' | 'pending' | 'done' | 'same' | 'error' | 'hint';
+
+/** 插入译文前后要检查的祖先层数 */
+const GUARD_DEPTH = 6;
+
+interface Overflow {
+  node: Element;
+  dy: number;
+  dx: number;
+}
+
+/** 记录元素及其祖先当前的溢出量（内容超出盒子的像素） */
+function measureOverflow(el: Element): Overflow[] {
+  const out: Overflow[] = [];
+  let n: Element | null = el;
+  for (let i = 0; n && i < GUARD_DEPTH && n !== document.body && n !== document.documentElement; i++) {
+    out.push({ node: n, dy: n.scrollHeight - n.clientHeight, dx: n.scrollWidth - n.clientWidth });
+    n = n.parentElement;
+  }
+  return out;
+}
+
+/** 插入译文后，有没有哪个固定尺寸的容器因此溢出（被裁切或盖住相邻内容） */
+function causedOverflow(before: Overflow[]): boolean {
+  return before.some(({ node, dy, dx }) => {
+    const ny = node.scrollHeight - node.clientHeight;
+    const nx = node.scrollWidth - node.clientWidth;
+    return ny > Math.max(dy, 0) + 2 || nx > Math.max(dx, 0) + 2;
+  });
+}
 
 export async function translateBatch(texts: string[], s: Settings): Promise<string[]> {
   if (s.provider === 'builtin') {
@@ -27,6 +64,7 @@ export class PageTranslator {
   private flushTimer = 0;
   private pendingRoots = new Set<Element>();
   private mutationTimer = 0;
+  private hints = new WeakMap<Element, string>();
 
   constructor(private getSettings: () => Settings) {}
 
@@ -82,7 +120,8 @@ export class PageTranslator {
   }
 
   private scan(root: Element) {
-    for (const el of collectSegments(root, this.settings.targetLang)) {
+    const opts = { target: this.settings.targetLang, smart: this.settings.scope !== 'all' };
+    for (const el of collectSegments(root, opts)) {
       this.src.set(el, getText(el));
       this.setState(el, 'wait');
       this.touched.add(el);
@@ -100,6 +139,12 @@ export class PageTranslator {
 
   private async enqueue(el: Element) {
     if (this.state(el) !== 'wait') return;
+    // 只给读屏软件看的隐藏文字、跳转链接、未显示的 tooltip：不翻译（否则译文会出现在奇怪的位置）
+    const rect = el.getBoundingClientRect();
+    if (rect.width < 4 || rect.height < 4 || isVisuallyHidden(el) || !this.src.get(el)) {
+      this.setState(el, 'same');
+      return;
+    }
     this.setState(el, 'pending');
     const spin = document.createElement('font');
     spin.className = 'bilingo-loading';
@@ -149,7 +194,7 @@ export class PageTranslator {
         this.settings,
       );
       if (gen !== this.generation) return;
-      batch.forEach((el, i) => this.insert(el, result[i]));
+      this.insertAll(batch, result);
     } catch (e) {
       if (gen !== this.generation) return;
       batch.forEach((el) => this.markError(el, (e as Error).message || String(e)));
@@ -160,21 +205,46 @@ export class PageTranslator {
     for (const c of [...el.children]) if (c.classList.contains(cls)) c.remove();
   }
 
-  private insert(el: Element, text: string | undefined) {
-    this.removeOwn(el, 'bilingo-loading');
+  /** 布局受限、放不下译文的段落：鼠标悬停时显示的译文 */
+  hintOf(el: Element): string | undefined {
+    return this.hints.get(el);
+  }
+
+  /**
+   * 批量插入译文，并检查是否破坏布局：
+   * 先读（插入前的溢出量）→ 再写（插入全部译文）→ 再读（插入后的溢出量），整批只触发两次排版。
+   * 如果某段译文让固定高度 / 宽度的容器溢出，就撤回该译文，改为悬停显示。
+   */
+  private insertAll(els: Element[], results: string[]) {
+    const items: { el: Element; tr: string }[] = [];
+    els.forEach((el, i) => {
+      this.removeOwn(el, 'bilingo-loading');
+      const tr = results[i]?.trim();
+      if (!el.isConnected || !tr || tr === this.src.get(el)) this.setState(el, 'same');
+      else items.push({ el, tr });
+    });
+    const before = items.map(({ el }) => measureOverflow(el));
+    const nodes = items.map(({ el, tr }) => this.appendTranslation(el, tr));
+    items.forEach(({ el, tr }, k) => {
+      if (causedOverflow(before[k]!)) {
+        nodes[k]!.remove();
+        this.hints.set(el, tr);
+        this.setState(el, 'hint');
+      } else {
+        this.setState(el, 'done');
+      }
+    });
+  }
+
+  private appendTranslation(el: Element, tr: string): Element {
     const src = this.src.get(el)!;
-    const tr = text?.trim();
-    if (!tr || tr === src) {
-      this.setState(el, 'same');
-      return;
-    }
     const node = document.createElement('font');
     const mode = preferInline(el, src) ? 'bilingo-inline' : 'bilingo-block';
     node.className = `bilingo-tr ${mode} bilingo-style-${this.settings.style}`;
     node.setAttribute('translate', 'no');
     node.textContent = tr; // 只作为纯文本插入，杜绝 XSS
     el.appendChild(node);
-    this.setState(el, 'done');
+    return node;
   }
 
   private markError(el: Element, message: string) {

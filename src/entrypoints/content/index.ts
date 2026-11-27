@@ -37,6 +37,17 @@ export default defineContentScript({
       }
     }
 
+    // 布局放不下译文的段落：鼠标悬停时用气泡显示译文
+    let hintEl: Element | null = null;
+    document.addEventListener('pointerover', (e) => {
+      const el = (e.target as Element | null)?.closest?.('[data-bilingo="hint"]') ?? null;
+      if (el === hintEl) return;
+      hintEl = el;
+      const text = el && translator.hintOf(el);
+      if (el && text) ui.showBubble(el.getBoundingClientRect(), text, 'ok', true);
+      else ui.hideHint();
+    });
+
     onMessage('toggle', () => ({ active: translator.toggle() }));
     onMessage('status', () => ({ active: translator.active }));
     onMessage('retranslate', () => {
@@ -54,6 +65,10 @@ export default defineContentScript({
       const prev = settings;
       settings = next;
       if (prev.style !== next.style) translator.restyle(next.style);
+      if (prev.scope !== next.scope && translator.active) {
+        translator.restore();
+        translator.start();
+      }
       ui.setBall(next.floatBall, translator.active);
     });
 

@@ -30,6 +30,13 @@
   opacity: 0.75;
 }
 
+/* 布局放不下译文的段落：只加虚线下划线提示，悬停显示译文，不改变布局 */
+[data-bilingo='hint'] {
+  text-decoration: underline dotted oklch(0.6 0.18 274 / 0.8) !important;
+  text-underline-offset: 0.2em;
+  cursor: help;
+}
+
 /* 翻译中：三点跳动 */
 .bilingo-loading {
   display: inline-flex;

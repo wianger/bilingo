@@ -86,6 +86,8 @@ const CSS = `
   .bubble.loading .body { color: var(--muted); }
   .bubble.loading .dot { animation: pulse 1s ease-in-out infinite; }
   .bubble.loading .copy { display: none; }
+  .bubble.hint { pointer-events: none; }
+  .bubble.hint .head button { display: none; }
   @keyframes pulse { 50% { opacity: .3; scale: .7; } }
   [hidden] { display: none !important; }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
@@ -210,9 +212,14 @@ export class PageUI {
     this.ball.classList.toggle('on', active);
   }
 
-  showBubble(rect: DOMRect, text: string, state: BubbleState = 'ok') {
+  /** 是否是悬停提示（悬停提示在鼠标离开时自动关闭，不影响划词翻译气泡） */
+  private isHint = false;
+
+  showBubble(rect: DOMRect, text: string, state: BubbleState = 'ok', hint = false) {
     this.mount();
     const b = this.bubble;
+    this.isHint = hint;
+    b.classList.toggle('hint', hint);
     this.bubbleBody.textContent = text;
     b.classList.toggle('err', state === 'error');
     b.classList.toggle('loading', state === 'loading');
@@ -221,6 +228,10 @@ export class PageUI {
     const top = below + b.offsetHeight > innerHeight ? Math.max(8, rect.top - 8 - b.offsetHeight) : below;
     b.style.top = `${top}px`;
     b.style.left = `${Math.min(Math.max(8, rect.left), vw() - b.offsetWidth - 8)}px`;
+  }
+
+  hideHint() {
+    if (this.isHint) this.hideBubble();
   }
 
   hideBubble() {
