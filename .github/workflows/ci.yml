@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      # 跳过依赖的安装脚本（onnxruntime-node 等用不到），只生成 WXT 类型
+      - run: npm ci --ignore-scripts
+      - run: npx wxt prepare
+      - run: npm run lint
+      - run: npm run check
+      - run: npm run format:check
+      - run: npm test
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - name: Build all browsers
+        run: |
+          npm run zip
+          npm run zip:edge
+          npm run build:safari
+      - uses: actions/upload-artifact@v7
+        with:
+          name: bilingo-extensions
+          path: .output/*.zip

@@ -1,0 +1,51 @@
+# Contributing to Bilingo
+
+Thanks for helping! Issues and pull requests are welcome in English or Chinese. 欢迎用中文或英文提交 Issue 和 PR。
+
+## Reporting problems
+
+- **A page translates badly** (UI text translated, content skipped, layout broken): open a [site issue](https://github.com/wianger/bilingo/issues/new?template=site_issue.yml) with the URL, a screenshot, and whether "只翻译正文" (main content only) was on. These reports are the most valuable input for improving the segmentation rules.
+- **Bugs**: use the [bug report](https://github.com/wianger/bilingo/issues/new?template=bug_report.yml) template.
+
+## Development setup
+
+Requirements: Node.js 22+ and Chrome or Edge.
+
+```bash
+npm install
+npm run dev        # opens Chrome with the extension and hot reload
+```
+
+Before opening a pull request, run:
+
+```bash
+npm run lint && npm run check && npm run format:check && npm test && npm run test:e2e
+```
+
+CI runs the same checks. The e2e tests need Playwright's Chromium (`npx playwright install chromium`).
+
+## Code guidelines
+
+- TypeScript strict mode, Svelte 5 runes, Prettier formatting (`npm run format`).
+- Never insert translated text as HTML; always use `textContent`.
+- Page-segmentation changes (`src/content/segmenter.ts`, `main-content.ts`) need a unit test, and ideally a check on a few real sites.
+- Code comments may be in Chinese or English.
+- Keep dependencies minimal; the content script is injected into every page you translate.
+
+## Technical notes
+
+Decisions that are easy to get wrong:
+
+- **Framework**: WXT is the only mainstream extension framework that targets Safari as well (Plasmo doesn't support Safari; CRXJS is Chromium-only).
+- **TypeScript 6, not 7**: TS 7 (native Go compiler) isn't supported by `svelte-check` yet.
+- **ESLint + Prettier, not Biome / Oxlint**: their Svelte support is incomplete.
+- **Built-in Translator API** only works in window contexts, so it runs in the content script, not in the service worker.
+- **Local LLM** lives in an offscreen document because service workers are suspended when idle and can't hold a 1 GB model. ONNX Runtime's `.wasm` is bundled under `/ort/` (no remote code in MV3), which needs `'wasm-unsafe-eval'` in the extension CSP.
+- **Gemma models** must use `q4`, not `q4f16`: fp16 on WebGPU produces garbage output (onnxruntime#26732).
+- **Chromium injects `body { font-size: 75% }`** into extension pages; `src/assets/ui.css` resets it.
+- **Microsoft Edge's free translate endpoint** (`edge.microsoft.com/translate/auth`) stopped working around August 2026; don't add it back.
+- **Assets**: `assets/logo.svg` is the single source for the logo. Run `npm run icons` after editing it, and `npm run build && npm run screenshots` to refresh README images.
+
+## License
+
+By contributing, you agree that your contributions will be licensed under the [MIT License](LICENSE).

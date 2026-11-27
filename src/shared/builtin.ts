@@ -65,7 +65,7 @@ export function getTranslator(source: string, target: string, onProgress?: Downl
       } catch (e) {
         if ((e as DOMException).name === 'NotAllowedError') {
           throw new Error(
-            `${source} → ${tgt} 的语言包尚未下载。请点击网页右下角的“译”按钮重试，或在扩展设置页点击“下载”。`,
+            `${source} → ${tgt} 的语言包尚未下载。请点击网页上的 Bilingo 悬浮按钮重试，或在扩展设置页点击“下载”。`,
             { cause: e },
           );
         }

@@ -32,6 +32,7 @@ export default defineConfig({
   },
   manifest: {
     name: 'Bilingo 双语网页翻译',
+    homepage_url: 'https://github.com/wianger/bilingo',
     description:
       '双语对照网页翻译：原文下方显示译文。支持浏览器内置 AI、本地大模型、谷歌、Azure、DeepL 和任意 OpenAI 兼容的大模型接口。',
     permissions: ['storage', 'contextMenus', 'scripting', 'activeTab', 'offscreen'],

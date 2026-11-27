@@ -1,0 +1,33 @@
+name: A page translates badly / 某个网页翻译得不好
+description: UI text was translated, content was skipped, or the layout broke. / 界面文字被翻译、正文被跳过、或布局被破坏。
+labels: [site]
+body:
+  - type: input
+    id: url
+    attributes:
+      label: Page URL / 网址
+    validations:
+      required: true
+  - type: dropdown
+    id: problem
+    attributes:
+      label: What went wrong / 问题
+      multiple: true
+      options:
+        - Content was not translated / 正文没有翻译
+        - Interface text was translated / 不该翻译的界面文字被翻译了
+        - Layout broke / 网页布局乱了
+        - Translation appeared in a strange place / 译文出现在奇怪的位置
+        - Other / 其他
+    validations:
+      required: true
+  - type: dropdown
+    id: scope
+    attributes:
+      label: “只翻译正文” (main content only)
+      options: ['On / 开', 'Off / 关']
+  - type: textarea
+    id: details
+    attributes:
+      label: Screenshot and details / 截图与说明
+      description: Which part of the page? A screenshot helps a lot. / 哪一部分？附截图最好。

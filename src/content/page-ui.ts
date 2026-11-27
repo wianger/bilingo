@@ -1,6 +1,7 @@
 // 悬浮按钮 + 划词翻译气泡，放在 Shadow DOM 里，与网页样式互不干扰
 import { storage } from 'wxt/utils/storage';
 import { HOST_ID } from './segmenter';
+import LOGO_SVG from '../../assets/logo.svg?raw';
 
 /** 悬浮按钮位置：贴靠左 / 右边缘，top 为视口高度的比例（窗口缩放后仍在相对位置） */
 export interface BallPos {
@@ -39,24 +40,26 @@ const CSS = `
     font-family: system-ui, -apple-system, 'Segoe UI Variable Text', 'PingFang SC', 'Microsoft YaHei UI', sans-serif;
   }
 
-  /* 悬浮按钮：半透明磨砂玻璃，悬停 / 已翻译时变为品牌渐变 */
+  /* 悬浮按钮 = Bilingo 图标：上面的气泡是原文，下面的是译文。
+     未翻译时译文气泡半透明、颜色略淡；翻译后译文气泡变实，并加一圈光晕 */
   .ball {
     position: fixed; top: 80vh; right: ${EDGE}px; left: auto; z-index: 2147483646;
-    display: grid; place-items: center; width: ${BALL}px; height: ${BALL}px; padding: 0;
-    border: 1px solid var(--border); border-radius: 50%;
-    font-size: 16px; font-weight: 650; line-height: 1; color: var(--accent);
-    background: var(--surface); backdrop-filter: blur(12px) saturate(1.6);
-    box-shadow: 0 4px 14px -2px oklch(0.2 0.04 274 / 0.22), 0 1px 3px oklch(0 0 0 / 0.08);
-    opacity: 0.7; cursor: pointer; touch-action: none; user-select: none;
+    display: block; width: ${BALL}px; height: ${BALL}px; padding: 0;
+    border: none; border-radius: ${Math.round((BALL * 30) / 128)}px; background: none;
+    box-shadow: 0 4px 14px -2px oklch(0.35 0.15 280 / 0.45), 0 1px 3px oklch(0 0 0 / 0.12);
+    opacity: 0.72; filter: saturate(0.75); cursor: pointer; touch-action: none; user-select: none;
     transition: opacity .2s var(--ease), scale .2s var(--ease), left .25s var(--ease), top .25s var(--ease),
-      color .2s, background .2s, box-shadow .2s;
+      filter .2s, box-shadow .2s;
   }
-  .ball:hover, .ball:focus-visible, .ball.dragging { opacity: 1; scale: 1.08; }
+  .ball svg { display: block; width: 100%; height: 100%; }
+  .ball .mark-tr { fill-opacity: 0.5; transition: fill-opacity .25s var(--ease); }
+  .ball:hover, .ball:focus-visible, .ball.dragging { opacity: 1; filter: none; scale: 1.08; }
   .ball:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .ball.on {
-    border-color: transparent; color: #fff; background: var(--gradient); opacity: .95;
-    box-shadow: 0 6px 18px -4px oklch(0.55 0.21 280 / 0.6);
+    opacity: 1; filter: none;
+    box-shadow: 0 0 0 3px oklch(0.62 0.2 280 / 0.28), 0 6px 18px -4px oklch(0.55 0.21 280 / 0.6);
   }
+  .ball.on .mark-tr { fill-opacity: 1; }
   .ball.dragging { cursor: grabbing; scale: 1.12; transition: none; }
 
   /* 划词翻译气泡 */
@@ -108,7 +111,7 @@ export class PageUI {
     this.host.id = HOST_ID;
     const shadow = this.host.attachShadow({ mode: 'open' });
     shadow.innerHTML = `<style>${CSS}</style>
-      <button class="ball" title="翻译 / 显示原文 (Alt+A)，可拖动" hidden>译</button>
+      <button class="ball" title="Bilingo：翻译 / 显示原文 (Alt+A)，可拖动" aria-label="Bilingo 翻译" hidden>${LOGO_SVG.replace(/<title>[^<]*<\/title>/, '')}</button>
       <div class="bubble" role="dialog" aria-label="划词翻译" hidden>
         <div class="head"><span class="dot"></span>Bilingo 译文<span class="sp"></span>
           <button class="copy" title="复制译文" aria-label="复制译文">${ICON_COPY}</button>

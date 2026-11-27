@@ -2,7 +2,7 @@
   "name": "bilingo",
   "version": "0.2.0",
   "private": true,
-  "description": "Bilingual web page translation extension",
+  "description": "Open-source bilingual web page translation extension for Chrome, Edge and Safari",
   "type": "module",
   "scripts": {
     "dev": "wxt",
@@ -19,7 +19,8 @@
     "postinstall": "wxt prepare",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "screenshots": "node scripts/screenshots.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -51,5 +52,23 @@
     "@mozilla/readability": "^0.6.0",
     "@webext-core/messaging": "^4.0.2",
     "idb": "^8.0.4"
-  }
+  },
+  "license": "MIT",
+  "author": "Bilingo contributors",
+  "homepage": "https://github.com/wianger/bilingo#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wianger/bilingo.git"
+  },
+  "bugs": {
+    "url": "https://github.com/wianger/bilingo/issues"
+  },
+  "keywords": [
+    "browser-extension",
+    "translation",
+    "bilingual",
+    "webgpu",
+    "wxt",
+    "svelte"
+  ]
 }

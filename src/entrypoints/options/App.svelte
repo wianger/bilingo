@@ -338,7 +338,7 @@
         <label class="row">
           <div>
             <div>悬浮翻译按钮</div>
-            <div class="muted">在网页边缘显示可拖动的“译”按钮</div>
+            <div class="muted">在网页边缘显示可拖动的 Bilingo 图标按钮</div>
           </div>
           <input type="checkbox" class="switch" bind:checked={s.floatBall} />
         </label>

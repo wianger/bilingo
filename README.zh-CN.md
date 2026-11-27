@@ -1,0 +1,181 @@
+<p align="center">
+  <img src="assets/logo.svg" width="96" height="96" alt="Bilingo 图标">
+</p>
+
+<h1 align="center">Bilingo</h1>
+
+<p align="center">
+  <b>用两种语言读网页。</b><br>
+  开源的双语对照网页翻译扩展，支持 Chrome、Edge、Safari。译文显示在每段原文下方，原文保持不动。
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-6a5cff" alt="MIT 许可证"></a>
+  <a href="https://github.com/wianger/bilingo/actions/workflows/ci.yml"><img src="https://github.com/wianger/bilingo/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/Manifest-V3-4f7bff" alt="Manifest V3">
+  <img src="https://img.shields.io/badge/Chrome%20·%20Edge%20·%20Safari-supported-9b4dff" alt="Chrome、Edge、Safari">
+</p>
+
+<p align="center">
+  <a href="README.md">English</a> · 简体中文
+</p>
+
+<p align="center">
+  <img src="docs/images/demo.png" alt="Bilingo 翻译后的网页：每段英文下方显示中文译文" width="860">
+</p>
+
+## 为什么做 Bilingo
+
+双语对照翻译很适合阅读外文内容，但主流产品把 AI 翻译放进了付费订阅。Bilingo 是免费、开源的替代品：可以用你自己的 API Key，可以**在自己的显卡上**运行翻译模型，也可以直接用浏览器内置的翻译。Bilingo 没有服务器，你的文本不会经过任何“Bilingo 后台”。
+
+## 功能
+
+- **一键切换双语 / 原文**：译文插在每段原文下方。点悬浮按钮、按 <kbd>Alt</kbd>+<kbd>A</kbd>，或在工具栏弹窗里切换。
+- **只翻译该翻译的**：文章类网页（新闻、博客、文档）先用 [Mozilla Readability](https://github.com/mozilla/readability)（Firefox 阅读模式的算法）识别正文；其他网页跳过导航、菜单、按钮、标签胶囊、链接列表、代码标识符和读屏专用的隐藏文字。
+- **不破坏网页布局**：插入译文前后测量周围容器。如果译文会让固定尺寸的卡片、标签条溢出，就撤回译文，改为虚线提示，鼠标悬停显示。
+- **省钱**：只翻译进入视口附近的段落，自动跟随动态加载的内容，跳过已是目标语言的段落，翻译结果缓存在本地（IndexedDB），同一段文字不重复花钱。
+- **6 种翻译引擎**：从免费离线到任选大模型，见下表。
+- 右键划词翻译、可拖动的悬浮按钮、“总是翻译此网站”、5 种译文样式、浅色 / 深色模式。
+
+<p align="center">
+  <img src="docs/images/popup.png" alt="Bilingo 弹窗" height="300">
+  &nbsp;
+  <img src="docs/images/options.png" alt="Bilingo 设置页" height="300">
+</p>
+
+## 翻译引擎
+
+| 引擎                      | 费用                           | 说明                                                                                                                                                                                                                                                                                                                       |
+| ------------------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **浏览器内置 AI**（默认） | 免费                           | Chrome 138+ / Edge 148+ 桌面版自带的本地模型（[Translator API](https://developer.chrome.com/docs/ai/translator-api)），不联网、文本不出本机。每个语言对首次使用需下载语言包                                                                                                                                                |
+| **本地大模型**            | 免费                           | 用 WebGPU 在你的显卡上运行开源翻译模型：[Hy-MT2 1.8B](https://huggingface.co/tencent/Hy-MT2-1.8B)（推荐，约 1.1 GB，Apache-2.0）、[TranslateGemma 4B](https://huggingface.co/onnx-community/translategemma-text-4b-it-ONNX)（实验性，约 3.1 GB）或自定义模型。默认走 hf-mirror 镜像，支持断点续传；仅 Chrome / Edge 桌面版 |
+| **任意 OpenAI 兼容接口**  | 自带 Key（部分平台有免费额度） | DeepSeek、智谱 GLM、硅基流动、阿里百炼、OpenRouter、OpenAI、Ollama 等。批量 JSON 协议，漏译自动逐条补译；可自定义提示词 / 术语表                                                                                                                                                                                           |
+| **Azure AI 翻译**         | 每月 200 万字符免费（F0）      | 官方 API                                                                                                                                                                                                                                                                                                                   |
+| **DeepL**                 | DeepL API Free 免费额度        | 官方 API                                                                                                                                                                                                                                                                                                                   |
+| **谷歌翻译**              | 免费                           | 非官方网页接口，国内网络需要代理                                                                                                                                                                                                                                                                                           |
+
+> 曾经流行的微软 Edge 免费翻译接口（`edge.microsoft.com/translate/auth`）已于 2026 年 8 月前后失效，因此没有接入。
+
+## 安装
+
+暂未上架扩展商店，需要从源码构建：
+
+```bash
+git clone https://github.com/wianger/bilingo.git
+cd bilingo
+npm install
+npm run build        # Chrome → .output/chrome-mv3
+npm run build:edge   # Edge   → .output/edge-mv3
+```
+
+打开 `chrome://extensions`（或 `edge://extensions`），开启 **开发者模式**，点 **加载已解压的扩展程序**，选择上面的输出文件夹。
+
+<details>
+<summary><b>Safari</b>（需要 macOS 和 Xcode）</summary>
+
+```bash
+npm run build:safari                                     # → .output/safari-mv3
+xcrun safari-web-extension-converter .output/safari-mv3  # 生成 Xcode 工程，在 Xcode 中运行
+```
+
+Safari 版后台使用非持久后台页，而不是 service worker。Safari 没有内置 Translator API，也没有 offscreen API，所以暂时不能用浏览器内置翻译和本地大模型，请选用其他引擎。
+
+</details>
+
+## 使用
+
+| 操作                 | 方法                                                                  |
+| -------------------- | --------------------------------------------------------------------- |
+| 翻译 / 显示原文      | 点网页上的 Bilingo 悬浮按钮，按 <kbd>Alt</kbd>+<kbd>A</kbd>，或用弹窗 |
+| 划词翻译             | 选中文字 → 右键 → **翻译“…”**                                         |
+| 放不下的译文         | 带虚线下划线的文字：鼠标悬停查看译文                                  |
+| 总是翻译某个网站     | 弹窗 → **总是翻译此网站**                                             |
+| 移动悬浮按钮         | 直接拖动，松开后吸附到最近的边缘，并记住位置                          |
+| 换引擎、样式、快捷键 | 弹窗 → ⚙ 设置                                                         |
+
+## 隐私
+
+Bilingo 没有服务器，不收集任何统计数据。设置和 API Key 只保存在你的浏览器里。网页文字只会从你的浏览器直接发给**你选择的**翻译引擎；浏览器内置翻译和本地大模型不会把文字发到任何地方。详见 [PRIVACY.md](PRIVACY.md)。
+
+## 开发
+
+```bash
+npm run dev            # 开发模式，热更新（自动打开 Chrome）
+npm run dev:edge       # 同上，使用 Edge
+npm test               # 单元测试（Vitest）
+npm run test:e2e       # 构建后在真实 Chromium 中跑端到端测试（Playwright）
+npm run check          # 类型检查（svelte-check）
+npm run lint           # ESLint（类型感知 + Svelte）
+npm run format         # Prettier 格式化
+npm run icons          # 由 assets/logo.svg 重新生成 PNG 图标
+npm run screenshots    # 重新生成 README 截图（先 npm run build）
+npm run zip            # 打包上架用的 zip
+```
+
+### 架构
+
+```mermaid
+flowchart LR
+  subgraph Page["网页（内容脚本）"]
+    S[段落识别<br/>正文识别 · 跳过规则] --> T[页面翻译调度<br/>视口懒加载 · 分批 · 布局保护]
+    UI[悬浮按钮 · 划词气泡<br/>Shadow DOM]
+    B[浏览器内置 Translator API]
+  end
+  subgraph BG["后台 service worker"]
+    Q[翻译队列<br/>缓存 · 限流 · 重试]
+    P[翻译引擎<br/>OpenAI 兼容 · Azure · DeepL · 谷歌]
+    C[(IndexedDB 缓存)]
+  end
+  subgraph OFF["offscreen 文档"]
+    W[Web Worker<br/>Transformers.js + WebGPU]
+  end
+  T -- 内置翻译 --> B
+  T -- 其他引擎 --> Q
+  Q --> C
+  Q --> P
+  Q -- 本地大模型 --> W
+```
+
+```
+src/
+├─ entrypoints/   后台、内容脚本、弹窗、设置页、offscreen 文档
+├─ content/       段落识别、正文识别、页面翻译调度、悬浮 UI
+├─ background/    翻译队列、IndexedDB 缓存、HTTP 重试、各翻译引擎
+├─ local-llm/     WebGPU Worker、模型列表、提示词、断点续传下载
+├─ shared/        设置、语言表、类型化消息、内置 AI 封装
+├─ assets/        弹窗和设置页的设计系统 CSS
+└─ ui/            共用 UI 辅助（引擎图标）
+```
+
+要点：
+
+- **本地大模型**运行在 offscreen 文档里的 Web Worker 中，所有标签页共用一份模型，空闲 10 分钟自动卸载以释放显存。模型按 16 MB 分块用 HTTP Range 下载并存入 Cache Storage，1 GB 的下载中断后可从断点继续。ONNX Runtime 的 WebAssembly 随扩展打包，因为扩展不允许加载远程代码。
+- **正文识别**：在网页副本上运行 Readability，再通过序号属性把结果对应回真实网页；如果多出的文字不多，就把识别区域扩展到包含文章标题。
+- **布局保护**：每批译文插入前后各测量一次附近容器的溢出量（每批只触发两次排版），会造成溢出的译文改为悬停显示。
+- **安全**：译文一律以 `textContent` 插入，不会被当作 HTML 执行。
+
+### 技术栈
+
+[WXT](https://wxt.dev)（Manifest V3，跨浏览器含 Safari）· [Svelte 5](https://svelte.dev) · TypeScript 6 · [Transformers.js](https://github.com/huggingface/transformers.js) v4 + WebGPU · [Mozilla Readability](https://github.com/mozilla/readability) · [@webext-core/messaging](https://webext-core.aklinker1.io/) · [idb](https://github.com/jakearchibald/idb) · [Lucide](https://lucide.dev) · Vitest · Playwright · ESLint · Prettier。
+
+界面没有用 CSS 框架，而是用现代原生 CSS（OKLCH 色彩、`light-dark()`、可定制 `<select>`、`@starting-style`）：网页内的界面在 Shadow DOM 里，而扩展页面只运行在新版浏览器中。
+
+## 路线图
+
+- [ ] 界面多语言（英文界面）
+- [ ] 上架 Chrome 应用商店和 Edge 加载项商店
+- [ ] Safari 上的本地大模型（Safari 26 已支持 WebGPU）
+- [ ] 按网站自定义规则（翻译 / 不翻译哪些元素）
+- [ ] PDF 和视频字幕翻译
+
+## 参与贡献
+
+欢迎提交问题、反馈“某个网站翻得不好”，或直接提 Pull Request。请先看 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+## 致谢
+
+灵感来自 [沉浸式翻译](https://immersivetranslate.com) 和 [Read Frog](https://github.com/mengxi-ream/read-frog)。基于 [Transformers.js](https://github.com/huggingface/transformers.js)、[ONNX Runtime Web](https://onnxruntime.ai)、[Mozilla Readability](https://github.com/mozilla/readability) 和 [WXT](https://wxt.dev) 构建。本地模型来自 [腾讯混元](https://huggingface.co/tencent/Hy-MT2-1.8B) 和 [Google](https://huggingface.co/google/translategemma-4b-it)。
+
+## 许可证
+
+[MIT](LICENSE) © 2026 Bilingo contributors

@@ -1,0 +1,14 @@
+name: Feature request / 功能建议
+description: Suggest an idea. / 提出一个想法。
+labels: [enhancement]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like? / 你希望有什么功能
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why / 使用场景
