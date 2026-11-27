@@ -1,0 +1,109 @@
+/* 注入网页的译文样式：尽量继承网页自身字体与颜色，只做轻量区分 */
+.bilingo-tr.bilingo-block {
+  display: block !important;
+  margin: 0.35em 0 0.15em !important;
+  white-space: pre-line;
+}
+.bilingo-tr.bilingo-inline {
+  margin-left: 0.5em;
+}
+.bilingo-style-faded {
+  opacity: 0.68;
+}
+.bilingo-style-underline {
+  text-decoration: underline dashed oklch(0.6 0.18 274 / 0.7);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.28em;
+}
+.bilingo-style-highlight {
+  padding: 0 0.15em;
+  border-radius: 0.2em;
+  background: oklch(0.9 0.15 95 / 0.35);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.bilingo-style-quote.bilingo-block {
+  padding-left: 0.7em !important;
+  border-left: 3px solid oklch(0.62 0.18 274 / 0.75);
+}
+.bilingo-style-quote.bilingo-inline {
+  opacity: 0.75;
+}
+
+/* 翻译中：三点跳动 */
+.bilingo-loading {
+  display: inline-flex;
+  gap: 0.18em;
+  margin-left: 0.45em;
+  vertical-align: middle;
+}
+.bilingo-loading::before,
+.bilingo-loading::after {
+  content: '';
+}
+.bilingo-loading,
+.bilingo-loading::before,
+.bilingo-loading::after {
+  width: 0.36em;
+  height: 0.36em;
+  border-radius: 50%;
+  background: oklch(0.6 0.19 274);
+  animation: bilingo-bounce 1s ease-in-out infinite;
+}
+.bilingo-loading {
+  position: relative;
+  margin-right: 0.9em;
+  animation-delay: 0.15s;
+}
+.bilingo-loading::before,
+.bilingo-loading::after {
+  position: absolute;
+  top: 0;
+}
+.bilingo-loading::before {
+  left: 0.5em;
+  animation-delay: 0.3s;
+}
+.bilingo-loading::after {
+  left: 1em;
+  animation-delay: 0.45s;
+}
+
+/* 失败：可点击重试的小标签 */
+.bilingo-error {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.45em;
+  padding: 0 0.5em;
+  border-radius: 999px;
+  font-size: 0.8em;
+  line-height: 1.6;
+  color: oklch(0.55 0.2 25);
+  background: oklch(0.6 0.2 25 / 0.1);
+  cursor: pointer;
+  vertical-align: middle;
+}
+.bilingo-error:hover {
+  background: oklch(0.6 0.2 25 / 0.18);
+}
+
+@keyframes bilingo-bounce {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+    scale: 0.7;
+  }
+  40% {
+    opacity: 1;
+    scale: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bilingo-loading,
+  .bilingo-loading::before,
+  .bilingo-loading::after {
+    animation: none;
+    opacity: 0.6;
+  }
+}

@@ -1,0 +1,386 @@
+/*
+ * Bilingo 设计系统（扩展页面：弹窗 / 设置页）
+ * 只使用现代浏览器原生 CSS：OKLCH 色彩、light-dark() 明暗主题、可定制 <select>（appearance: base-select）、
+ * @starting-style 入场动画、:has()、:focus-visible。不支持的特性会自然降级。
+ */
+:root {
+  color-scheme: light dark;
+
+  /* 品牌色：靛蓝 → 紫 */
+  --brand-h: 274;
+  --accent: light-dark(oklch(0.55 0.21 var(--brand-h)), oklch(0.7 0.16 var(--brand-h)));
+  --accent-hover: light-dark(oklch(0.5 0.22 var(--brand-h)), oklch(0.75 0.15 var(--brand-h)));
+  --accent-soft: light-dark(oklch(0.55 0.21 var(--brand-h) / 0.1), oklch(0.7 0.16 var(--brand-h) / 0.16));
+  --on-accent: oklch(0.99 0 0);
+  --gradient: linear-gradient(135deg, oklch(0.6 0.2 264), oklch(0.58 0.22 298));
+
+  /* 中性色（略带品牌色相） */
+  --bg: light-dark(oklch(0.975 0.004 var(--brand-h)), oklch(0.17 0.008 var(--brand-h)));
+  --surface: light-dark(oklch(1 0 0), oklch(0.215 0.01 var(--brand-h)));
+  --surface-2: light-dark(oklch(0.96 0.006 var(--brand-h)), oklch(0.255 0.012 var(--brand-h)));
+  --fg: light-dark(oklch(0.24 0.02 var(--brand-h)), oklch(0.94 0.008 var(--brand-h)));
+  --muted: light-dark(oklch(0.52 0.02 var(--brand-h)), oklch(0.7 0.015 var(--brand-h)));
+  --border: light-dark(oklch(0.91 0.008 var(--brand-h)), oklch(0.31 0.012 var(--brand-h)));
+  --border-strong: light-dark(oklch(0.84 0.012 var(--brand-h)), oklch(0.4 0.015 var(--brand-h)));
+
+  --ok: light-dark(oklch(0.55 0.14 155), oklch(0.75 0.15 155));
+  --ok-soft: light-dark(oklch(0.55 0.14 155 / 0.12), oklch(0.75 0.15 155 / 0.16));
+  --warn: light-dark(oklch(0.6 0.14 70), oklch(0.8 0.14 80));
+  --err: light-dark(oklch(0.56 0.2 25), oklch(0.72 0.17 25));
+  --err-soft: light-dark(oklch(0.56 0.2 25 / 0.1), oklch(0.72 0.17 25 / 0.16));
+
+  --radius-s: 8px;
+  --radius: 12px;
+  --radius-l: 16px;
+  --shadow: 0 1px 2px oklch(0.2 0.02 var(--brand-h) / 0.06), 0 1px 1px oklch(0.2 0.02 var(--brand-h) / 0.04);
+  --shadow-l: 0 12px 32px -8px oklch(0.2 0.04 var(--brand-h) / 0.22), 0 2px 6px oklch(0.2 0.02 var(--brand-h) / 0.08);
+  --ring: 0 0 0 3px var(--accent-soft), 0 0 0 1px var(--accent);
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  font:
+    14px/1.5 system-ui,
+    -apple-system,
+    'Segoe UI Variable Text',
+    'PingFang SC',
+    'Microsoft YaHei UI',
+    sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+/* Chromium 给扩展页面注入的默认样式会把 body 设为 75% 字号和系统字体，这里覆盖回来 */
+body {
+  margin: 0;
+  font: inherit;
+}
+:where(h1, h2, h3, p) {
+  margin: 0;
+  text-wrap: pretty;
+}
+:where(h1, h2, h3) {
+  text-wrap: balance;
+}
+code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  font:
+    12px/1.4 ui-monospace,
+    'Cascadia Code',
+    Consolas,
+    monospace;
+  background: var(--surface-2);
+}
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+}
+svg {
+  flex: none;
+}
+
+/* ---------- 按钮 ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-s);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--fg);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.15s var(--ease),
+    border-color 0.15s var(--ease),
+    color 0.15s var(--ease),
+    transform 0.1s var(--ease);
+}
+.btn:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+.btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn.primary {
+  border-color: transparent;
+  color: var(--on-accent);
+  background: var(--accent);
+}
+.btn.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.btn.ghost {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+.btn.ghost:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+.btn.danger:hover:not(:disabled) {
+  border-color: var(--err);
+  color: var(--err);
+  background: var(--err-soft);
+}
+.btn.sm {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+.btn.icon {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+}
+
+/* ---------- 表单 ---------- */
+.input,
+.select,
+textarea.input {
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-s);
+  font: inherit;
+  color: inherit;
+  background: var(--surface);
+  transition:
+    border-color 0.15s var(--ease),
+    box-shadow 0.15s var(--ease);
+}
+textarea.input {
+  resize: vertical;
+  field-sizing: content;
+  min-height: 72px;
+}
+.input:hover,
+.select:hover {
+  border-color: var(--muted);
+}
+.input:focus,
+.select:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.input::placeholder {
+  color: var(--muted);
+  opacity: 0.8;
+}
+
+/* 原生下拉框：不支持 base-select 时用自绘箭头 */
+.select {
+  appearance: none;
+  padding-right: 32px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  cursor: pointer;
+}
+/* Chrome / Edge 135+：完全可定制的下拉列表 */
+@supports (appearance: base-select) {
+  .select,
+  .select::picker(select) {
+    appearance: base-select;
+  }
+  .select {
+    display: flex;
+    align-items: center;
+    padding-right: 10px;
+    background-image: none;
+  }
+  .select::picker-icon {
+    color: var(--muted);
+    transition: rotate 0.2s var(--ease);
+  }
+  .select:open::picker-icon {
+    rotate: 180deg;
+  }
+  .select::picker(select) {
+    margin-top: 4px;
+    padding: 4px;
+    max-height: min(360px, 60vh);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: var(--shadow-l);
+    opacity: 1;
+    translate: 0 0;
+    transition:
+      opacity 0.15s var(--ease),
+      translate 0.15s var(--ease),
+      overlay 0.15s allow-discrete,
+      display 0.15s allow-discrete;
+  }
+  @starting-style {
+    .select:open::picker(select) {
+      opacity: 0;
+      translate: 0 -4px;
+    }
+  }
+  .select option {
+    gap: 8px;
+    padding: 7px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .select option:hover,
+  .select option:focus-visible {
+    background: var(--surface-2);
+    box-shadow: none;
+  }
+  .select option:checked {
+    font-weight: 600;
+    color: var(--accent);
+  }
+  .select option::checkmark {
+    order: 1;
+    margin-left: auto;
+  }
+}
+
+/* 开关：<input type="checkbox" class="switch"> */
+.switch {
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 36px;
+  height: 20px;
+  margin: 0;
+  border-radius: 999px;
+  background: var(--border-strong);
+  cursor: pointer;
+  transition: background 0.2s var(--ease);
+}
+.switch::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: oklch(1 0 0);
+  box-shadow: 0 1px 3px oklch(0 0 0 / 0.25);
+  transition: translate 0.2s var(--ease);
+}
+.switch:checked {
+  background: var(--accent);
+}
+.switch:checked::before {
+  translate: 16px 0;
+}
+.switch:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ---------- 其他 ---------- */
+.card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+  background: var(--surface-2);
+  white-space: nowrap;
+}
+.badge.accent {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.badge.ok {
+  color: var(--ok);
+  background: var(--ok-soft);
+}
+.badge.err {
+  color: var(--err);
+  background: var(--err-soft);
+}
+.muted {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.ok {
+  color: var(--ok);
+}
+.err {
+  color: var(--err);
+}
+.progress {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+.progress > div {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--gradient);
+  transition: width 0.3s var(--ease);
+}
+.progress.indeterminate > div {
+  width: 35% !important;
+  animation: indeterminate 1.2s var(--ease) infinite;
+}
+@keyframes indeterminate {
+  from {
+    translate: -100% 0;
+  }
+  to {
+    translate: 300% 0;
+  }
+}
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin {
+  to {
+    rotate: 360deg;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
