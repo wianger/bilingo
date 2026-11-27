@@ -1,4 +1,5 @@
 // 悬浮按钮 + 划词翻译气泡，放在 Shadow DOM 里，与网页样式互不干扰
+import { m } from '@/shared/i18n';
 import { storage } from 'wxt/utils/storage';
 import { HOST_ID } from './segmenter';
 import LOGO_SVG from '../../assets/logo.svg?raw';
@@ -111,11 +112,11 @@ export class PageUI {
     this.host.id = HOST_ID;
     const shadow = this.host.attachShadow({ mode: 'open' });
     shadow.innerHTML = `<style>${CSS}</style>
-      <button class="ball" title="Bilingo：翻译 / 显示原文 (Alt+A)，可拖动" aria-label="Bilingo 翻译" hidden>${LOGO_SVG.replace(/<title>[^<]*<\/title>/, '')}</button>
-      <div class="bubble" role="dialog" aria-label="划词翻译" hidden>
-        <div class="head"><span class="dot"></span>Bilingo 译文<span class="sp"></span>
-          <button class="copy" title="复制译文" aria-label="复制译文">${ICON_COPY}</button>
-          <button class="close" title="关闭 (Esc)" aria-label="关闭">${ICON_X}</button>
+      <button class="ball" hidden>${LOGO_SVG.replace(/<title>[^<]*<\/title>/, '')}</button>
+      <div class="bubble" role="dialog" hidden>
+        <div class="head"><span class="dot"></span><span class="head-title"></span><span class="sp"></span>
+          <button class="copy">${ICON_COPY}</button>
+          <button class="close">${ICON_X}</button>
         </div>
         <div class="body"></div>
       </div>`;
@@ -134,6 +135,7 @@ export class PageUI {
         }, 1200);
       });
     });
+    this.applyLabels();
     this.initDrag(onBallClick);
     void ballPosItem.getValue().then((p) => this.applyPos(p));
     // 在其他标签页拖动后同步位置
@@ -144,6 +146,21 @@ export class PageUI {
       if (!e.composedPath().includes(this.host)) this.hideBubble();
     });
     document.addEventListener('keydown', (e) => e.key === 'Escape' && this.hideBubble());
+  }
+
+  /** 按当前界面语言设置所有文字（切换语言时再次调用） */
+  applyLabels() {
+    const shadow = this.host.shadowRoot!;
+    const set = (sel: string, label: string, title = label) => {
+      const el = shadow.querySelector(sel)!;
+      el.setAttribute('aria-label', label);
+      el.setAttribute('title', title);
+    };
+    set('.ball', m.ball_label(), m.ball_title());
+    set('.copy', m.bubble_copy());
+    set('.close', m.bubble_close());
+    this.bubble.setAttribute('aria-label', m.bubble_label());
+    shadow.querySelector('.head-title')!.textContent = m.bubble_head();
   }
 
   private applyPos(p: BallPos) {

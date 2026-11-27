@@ -24,11 +24,21 @@ npm run lint && npm run check && npm run format:check && npm test && npm run tes
 
 CI runs the same checks. The e2e tests need Playwright's Chromium (`npx playwright install chromium`).
 
+## Translating the interface
+
+Interface text lives in `messages/{locale}.json` and is compiled by [Paraglide JS](https://github.com/opral/paraglide-js) into type-safe functions (`m.key()`).
+
+- **Fix a translation**: edit the string in `messages/en.json` or `messages/zh-CN.json`.
+- **Add text**: add the same key to every file in `messages/`. Keep `{placeholders}` identical. A unit test fails if keys or placeholders differ.
+- **Add a language**: add it to `locales` in `project.inlang/settings.json`, create `messages/<locale>.json`, add an option in the settings page's language selector, and update `resolveLocale` in `src/shared/i18n.ts`. For the extension name in the browser's extension list, add `public/_locales/<locale>/messages.json`.
+- Never edit `src/paraglide/`; it is generated.
+
 ## Code guidelines
 
 - TypeScript strict mode, Svelte 5 runes, Prettier formatting (`npm run format`).
 - Never insert translated text as HTML; always use `textContent`.
 - Page-segmentation changes (`src/content/segmenter.ts`, `main-content.ts`) need a unit test, and ideally a check on a few real sites.
+- No hard-coded interface text: use `m.*()` from `@/shared/i18n`.
 - Code comments may be in Chinese or English.
 - Keep dependencies minimal; the content script is injected into every page you translate.
 

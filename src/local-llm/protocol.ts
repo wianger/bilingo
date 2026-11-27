@@ -1,3 +1,4 @@
+import type { Locale } from '@/shared/i18n';
 import type { PromptFormat } from './models';
 
 export interface LocalModelConfig {
@@ -8,6 +9,8 @@ export interface LocalModelConfig {
   format: PromptFormat;
   /** 固定量化方式；不填则自动选择 */
   dtype?: 'q4' | 'q4f16';
+  /** 界面语言（Worker 里的错误信息用） */
+  locale: Locale;
 }
 
 export type LocalStatus =

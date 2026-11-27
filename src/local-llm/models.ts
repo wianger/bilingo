@@ -7,11 +7,11 @@ export type PromptFormat = 'hymt' | 'translategemma';
 export interface LocalModelPreset {
   /** Hugging Face 仓库 id */
   repo: string;
+  /** 展示名（专有名词，不翻译）；说明文字见 src/ui/labels.ts */
   name: string;
   /** 约下载大小（MB） */
   sizeMB: number;
   license: string;
-  desc: string;
   format: PromptFormat;
   /** 固定量化方式；不填则按显卡能力自动选 q4f16 / q4 */
   dtype?: 'q4' | 'q4f16';
@@ -21,18 +21,16 @@ export interface LocalModelPreset {
 export const LOCAL_MODELS: LocalModelPreset[] = [
   {
     repo: 'drnfns/Hy-MT2-1.8B-ONNX',
-    name: 'Hy-MT2 1.8B（推荐）',
+    name: 'Hy-MT2 1.8B',
     sizeMB: 1085,
     license: 'Apache-2.0',
-    desc: '腾讯 2026 年 5 月发布的翻译专用模型，33 种语言，体积与质量最平衡（社区 ONNX 转换版）',
     format: 'hymt',
   },
   {
     repo: 'onnx-community/translategemma-text-4b-it-ONNX',
     name: 'TranslateGemma 4B',
     sizeMB: 3112,
-    license: 'Gemma 使用条款',
-    desc: 'Google 的翻译专用模型，55 种语言，质量更高但更慢、更占显存（建议 6GB 以上显存）',
+    license: 'Gemma Terms of Use',
     format: 'translategemma',
     // Gemma 系列在 WebGPU 上用 fp16 计算会输出乱码（onnxruntime#26732），官方演示同样使用 q4
     dtype: 'q4',

@@ -1,4 +1,5 @@
 // OpenAI 兼容的 Chat Completions 接口：DeepSeek / 智谱 / 硅基流动 / 通义 / Ollama / OpenAI / OpenRouter …
+import { m } from '@/shared/i18n';
 import { langEnglishName } from '@/shared/langs';
 import type { OpenAISettings, Settings } from '@/shared/settings';
 import { request, TranslateError } from '../http';
@@ -91,12 +92,12 @@ async function chat(c: OpenAISettings, system: string, user: string): Promise<st
   const res = await request(
     endpoint(c.baseUrl, '/chat/completions'),
     { method: 'POST', headers: headers(c.apiKey), body: JSON.stringify(body) },
-    'AI 接口',
+    m.label_ai_api(),
   );
   const data = (await res.json()) as { choices?: { message?: { content?: unknown } }[] };
   const content = data?.choices?.[0]?.message?.content;
   if (typeof content !== 'string')
-    throw new TranslateError('AI 接口返回格式异常：' + JSON.stringify(data).slice(0, 200));
+    throw new TranslateError(m.err_ai_format({ data: JSON.stringify(data).slice(0, 200) }));
   return stripThinking(content);
 }
 
@@ -106,9 +107,9 @@ function isLocal(url: string) {
 
 export async function translateOpenAI(texts: string[], s: Settings): Promise<string[]> {
   const c = s.openai;
-  if (!c.baseUrl) throw new TranslateError('请先在设置中填写 AI 接口地址');
-  if (!c.model) throw new TranslateError('请先在设置中填写模型名称');
-  if (!c.apiKey && !isLocal(c.baseUrl)) throw new TranslateError('请先在设置中填写 API Key');
+  if (!c.baseUrl) throw new TranslateError(m.err_need_base_url());
+  if (!c.model) throw new TranslateError(m.err_need_model());
+  if (!c.apiKey && !isLocal(c.baseUrl)) throw new TranslateError(m.err_need_api_key());
 
   const to = langEnglishName(s.targetLang);
   const extra = c.prompt.trim();
@@ -123,7 +124,7 @@ export async function translateOpenAI(texts: string[], s: Settings): Promise<str
 }
 
 export async function listOpenAIModels(baseUrl: string, apiKey: string): Promise<string[]> {
-  const res = await request(endpoint(baseUrl, '/models'), { headers: headers(apiKey) }, '获取模型列表');
+  const res = await request(endpoint(baseUrl, '/models'), { headers: headers(apiKey) }, m.openai_fetch_models());
   type Model = string | { id?: string; name?: string };
   const data = (await res.json()) as { data?: Model[]; models?: Model[] };
   const list = Array.isArray(data?.data) ? data.data : Array.isArray(data?.models) ? data.models : [];

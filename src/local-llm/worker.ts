@@ -1,4 +1,5 @@
 // 在 Web Worker 中用 Transformers.js + WebGPU 运行 Hy-MT2 翻译模型
+import { m, setUiLang } from '@/shared/i18n';
 import { env, pipeline, type TextGenerationPipeline } from '@huggingface/transformers';
 import { buildMessages, cleanOutput, maxNewTokens } from './prompt';
 import type { LocalModelConfig, LocalStatus, WorkerRequest, WorkerResponse } from './protocol';
@@ -25,19 +26,15 @@ function gpuPage(): string {
 async function pickDevice(): Promise<{ dtype: 'q4f16' | 'q4'; adapter: string }> {
   const gpu = (navigator as Navigator & { gpu?: GPU }).gpu;
   if (!gpu) {
-    throw new Error('当前浏览器不支持 WebGPU，本地大模型需要 Chrome / Edge 113 及以上版本');
+    throw new Error(m.err_no_webgpu());
   }
   const adapter = await gpu.requestAdapter({ powerPreference: 'high-performance' });
   if (!adapter) {
     // 常见原因：GPU 进程多次崩溃后浏览器在本次运行期间禁用了 WebGPU，或关闭了硬件加速、显卡在黑名单中
-    throw new Error(
-      `浏览器当前禁用了 WebGPU（无法获取显卡）。请打开 ${gpuPage()} 查看 WebGPU 状态；` +
-        '若曾出现“GPU process crashed”，请彻底退出浏览器（含后台进程，建议关闭“启动增强”）后重开；' +
-        '并确认设置中已开启“使用图形加速”',
-    );
+    throw new Error(m.err_webgpu_disabled({ page: gpuPage() }));
   }
   if ((adapter.info as GPUAdapterInfo & { isFallbackAdapter?: boolean }).isFallbackAdapter) {
-    throw new Error(`浏览器只提供了软件模拟的 WebGPU（无硬件加速），无法运行本地大模型。请检查 ${gpuPage()}`);
+    throw new Error(m.err_webgpu_software({ page: gpuPage() }));
   }
   const name = [adapter.info.vendor, adapter.info.architecture].filter(Boolean).join(' ');
   return { dtype: adapter.features.has('shader-f16') ? 'q4f16' : 'q4', adapter: name || 'unknown' };
@@ -121,7 +118,7 @@ async function translate(
     pipe.dispose().catch(() => undefined);
     setStatus({
       state: 'error',
-      message: `推理失败（可能是显卡被重置），下次翻译时将自动重新加载：${(e as Error).message}`,
+      message: m.err_inference({ msg: (e as Error).message }),
     });
     throw e;
   }
@@ -131,6 +128,7 @@ async function translate(
 self.addEventListener('message', (ev: MessageEvent<WorkerRequest>) => {
   const req = ev.data;
   const run = async () => {
+    setUiLang(req.config.locale);
     try {
       if (req.type === 'load') {
         await load(req.config);

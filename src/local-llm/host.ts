@@ -1,4 +1,5 @@
 // 管理运行模型的 Worker（运行在 offscreen 文档中）
+import { m } from '@/shared/i18n';
 import type { LocalModelConfig, LocalStatus, WorkerRequest, WorkerResponse } from './protocol';
 
 type WithoutId<T> = T extends unknown ? Omit<T, 'id'> : never;
@@ -34,7 +35,7 @@ export class LocalLlmHost {
       else p.reject(new Error(msg.message));
     });
     w.addEventListener('error', (ev) => {
-      const err = new Error(`本地模型 Worker 崩溃：${ev.message}`);
+      const err = new Error(m.err_worker_crash({ msg: ev.message }));
       for (const p of this.pending.values()) p.reject(err);
       this.pending.clear();
       this.worker = null;
@@ -71,7 +72,7 @@ export class LocalLlmHost {
   dispose() {
     this.worker?.terminate();
     this.worker = null;
-    for (const p of this.pending.values()) p.reject(new Error('本地模型已卸载'));
+    for (const p of this.pending.values()) p.reject(new Error(m.err_model_unloaded()));
     this.pending.clear();
     this.status = { state: 'idle' };
     this.onStatus?.(this.status);

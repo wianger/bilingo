@@ -58,7 +58,7 @@ describe('translateOpenAI', () => {
   it('requires an API key for remote endpoints but not localhost', async () => {
     const s = openaiSettings();
     s.openai.apiKey = '';
-    await expect(translateOpenAI(['A'], s)).rejects.toThrow('API Key');
+    await expect(translateOpenAI(['A'], s)).rejects.toThrow('API key');
     s.openai.baseUrl = 'http://localhost:11434/v1';
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(chatReply('甲'));
     expect(await translateOpenAI(['A'], s)).toEqual(['甲']);

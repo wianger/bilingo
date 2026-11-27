@@ -1,3 +1,4 @@
+import { paraglideVitePlugin } from '@inlang/paraglide-js';
 import { defaultClientConditions } from 'vite';
 import { defineConfig } from 'wxt';
 import { fileURLToPath } from 'node:url';
@@ -6,12 +7,17 @@ import { fileURLToPath } from 'node:url';
 const ORT_DIST = fileURLToPath(new URL('./node_modules/onnxruntime-web/dist/', import.meta.url));
 const ORT_FILES = ['ort-wasm-simd-threaded.asyncify.mjs', 'ort-wasm-simd-threaded.asyncify.wasm'];
 
+const paraglide = () => paraglideVitePlugin({ project: './project.inlang', outdir: './src/paraglide' });
+
 // https://wxt.dev/api/config.html
 export default defineConfig({
   srcDir: 'src',
   modules: ['@wxt-dev/module-svelte'],
   vite: () => ({
-    worker: { format: 'es' },
+    // 界面文字：messages/{locale}.json → src/paraglide（编译期生成、类型安全、按需打包）
+    plugins: [paraglide()],
+    // Worker（本地模型）单独打包，不继承上面的插件，需要再注册一次
+    worker: { format: 'es', plugins: () => [paraglide()] },
     // 使用不内嵌 wasm 的 onnxruntime 构建，wasm 只从 /ort/ 加载一份
     resolve: { conditions: ['onnxruntime-web-use-extern-wasm', ...defaultClientConditions] },
   }),
@@ -31,10 +37,11 @@ export default defineConfig({
     },
   },
   manifest: {
-    name: 'Bilingo 双语网页翻译',
+    // 名称、描述按浏览器语言取自 public/_locales（manifest 只能用浏览器原生的 i18n）
+    name: '__MSG_extName__',
+    default_locale: 'en',
     homepage_url: 'https://github.com/wianger/bilingo',
-    description:
-      '双语对照网页翻译：原文下方显示译文。支持浏览器内置 AI、本地大模型、谷歌、Azure、DeepL 和任意 OpenAI 兼容的大模型接口。',
+    description: '__MSG_extDescription__',
     permissions: ['storage', 'contextMenus', 'scripting', 'activeTab', 'offscreen'],
     host_permissions: ['<all_urls>'],
     // 'wasm-unsafe-eval'：运行本地模型的 WebAssembly 所需（MV3 允许的唯一放宽项）
@@ -44,7 +51,7 @@ export default defineConfig({
     commands: {
       'toggle-translate': {
         suggested_key: { default: 'Alt+A' },
-        description: '翻译当前页面 / 显示原文',
+        description: '__MSG_cmdToggle__',
       },
     },
   },

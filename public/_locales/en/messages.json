@@ -1,0 +1,7 @@
+{
+  "extName": { "message": "Bilingo: Bilingual Web Translation" },
+  "extDescription": {
+    "message": "Read the web in two languages: translations appear under each paragraph. Use the browser's built-in AI, a local LLM on your GPU, Google, Azure, DeepL or any OpenAI-compatible API."
+  },
+  "cmdToggle": { "message": "Translate this page / show original" }
+}

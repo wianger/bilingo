@@ -3,6 +3,8 @@
   import { getSettings, PROVIDERS_META, saveSettings, type ProviderId, type Settings } from '@/shared/settings';
   import { sendToTab } from '@/shared/tabs';
   import { PROVIDER_ICONS } from '@/ui/provider-icons';
+  import { providerName, providerTags } from '@/ui/labels';
+  import { m, setUiLang, uiLocale } from '@/shared/i18n';
   import Globe from '@lucide/svelte/icons/globe';
   import Languages from '@lucide/svelte/icons/languages';
   import LoaderCircle from '@lucide/svelte/icons/loader-circle';
@@ -15,10 +17,14 @@
   let active = $state(false);
   let supported = $state(true);
   let busy = $state(false);
+  /** 界面语言：变化时整个界面重新渲染 */
+  let lang = $state(uiLocale());
   const ProviderIcon = $derived(settings ? PROVIDER_ICONS[settings.provider] : null);
 
   async function init() {
     settings = await getSettings();
+    setUiLang(settings.uiLang);
+    lang = uiLocale();
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
     tabId = tab?.id;
     try {
@@ -63,85 +69,94 @@
 </script>
 
 {#if settings}
-  <main>
-    <header>
-      <div class="brand">
-        <img src="/icon/48.png" alt="" width="26" height="26" />
-        <span>Bilingo</span>
-      </div>
-      <button class="btn ghost icon" title="设置" aria-label="设置" onclick={() => browser.runtime.openOptionsPage()}>
-        <SettingsIcon size={17} />
-      </button>
-    </header>
+  {#key lang}
+    <main>
+      <header>
+        <div class="brand">
+          <img src="/icon/48.png" alt="" width="26" height="26" />
+          <span>Bilingo</span>
+        </div>
+        <button
+          class="btn ghost icon"
+          title={m.settings()}
+          aria-label={m.settings()}
+          onclick={() => browser.runtime.openOptionsPage()}
+        >
+          <SettingsIcon size={17} />
+        </button>
+      </header>
 
-    <section class="site card">
-      <div class="host">
-        <Globe size={14} />
-        <span title={hostname}>{hostname || '当前页面'}</span>
-        {#if active}<span class="badge accent">已翻译</span>{/if}
-      </div>
-      <button class="btn main" class:primary={!active} disabled={!supported || busy} onclick={toggle}>
-        {#if busy}
-          <LoaderCircle size={17} class="spin" />
-        {:else if active}
-          <Undo2 size={17} />
-        {:else}
-          <Languages size={17} />
+      <section class="site card">
+        <div class="host">
+          <Globe size={14} />
+          <span title={hostname}>{hostname || m.popup_this_page()}</span>
+          {#if active}<span class="badge accent">{m.popup_translated()}</span>{/if}
+        </div>
+        <button class="btn main" class:primary={!active} disabled={!supported || busy} onclick={toggle}>
+          {#if busy}
+            <LoaderCircle size={17} class="spin" />
+          {:else if active}
+            <Undo2 size={17} />
+          {:else}
+            <Languages size={17} />
+          {/if}
+          {active ? m.popup_show_original() : m.popup_translate_page()}
+        </button>
+        {#if !supported}
+          <p class="muted center">{m.popup_unsupported()}</p>
         {/if}
-        {active ? '显示原文' : '翻译此页面'}
-      </button>
-      {#if !supported}
-        <p class="muted center">浏览器内置页面和扩展商店无法翻译</p>
-      {/if}
-    </section>
+      </section>
 
-    <section class="list card">
-      <label class="item">
-        <span class="label">目标语言</span>
-        <select
-          class="select"
-          value={settings.targetLang}
-          onchange={(e) => change({ targetLang: e.currentTarget.value })}
-        >
-          {#each LANGS as l (l.code)}
-            <option value={l.code}>{l.name}</option>
-          {/each}
-        </select>
-      </label>
-      <label class="item">
-        <span class="label">翻译服务</span>
-        <select
-          class="select"
-          value={settings.provider}
-          onchange={(e) => change({ provider: e.currentTarget.value as ProviderId })}
-        >
-          <button><selectedcontent></selectedcontent></button>
-          {#each Object.entries(PROVIDERS_META) as [id, meta] (id)}
-            {@const Icon = PROVIDER_ICONS[id as ProviderId]}
-            <option value={id}><Icon size={15} />{meta.name}</option>
-          {/each}
-        </select>
-      </label>
-      <label class="item">
-        <span class="label">总是翻译此网站</span>
-        <input
-          type="checkbox"
-          class="switch"
-          disabled={!supported}
-          checked={settings.autoSites.includes(hostname)}
-          onchange={(e) => setAlways(e.currentTarget.checked)}
-        />
-      </label>
-    </section>
+      <section class="list card">
+        <label class="item">
+          <span class="label">{m.target_language()}</span>
+          <select
+            class="select"
+            value={settings.targetLang}
+            onchange={(e) => change({ targetLang: e.currentTarget.value })}
+          >
+            {#each LANGS as l (l.code)}
+              <option value={l.code}>{l.name}</option>
+            {/each}
+          </select>
+        </label>
+        <label class="item">
+          <span class="label">{m.translation_engine()}</span>
+          <select
+            class="select"
+            value={settings.provider}
+            onchange={(e) => change({ provider: e.currentTarget.value as ProviderId })}
+          >
+            <button><selectedcontent></selectedcontent></button>
+            {#each Object.keys(PROVIDERS_META) as id (id)}
+              {@const Icon = PROVIDER_ICONS[id as ProviderId]}
+              <option value={id}><Icon size={15} />{providerName(id as ProviderId)}</option>
+            {/each}
+          </select>
+        </label>
+        <label class="item">
+          <span class="label">{m.popup_always_translate()}</span>
+          <input
+            type="checkbox"
+            class="switch"
+            disabled={!supported}
+            checked={settings.autoSites.includes(hostname)}
+            onchange={(e) => setAlways(e.currentTarget.checked)}
+          />
+        </label>
+      </section>
 
-    <footer>
-      <span class="muted">
-        {#if ProviderIcon}<ProviderIcon size={13} />{/if}
-        {PROVIDERS_META[settings.provider].tags.join(' · ')}
-      </span>
-      <span class="muted"><kbd>Alt</kbd> + <kbd>A</kbd> 快速切换</span>
-    </footer>
-  </main>
+      <footer>
+        <span class="muted">
+          {#if ProviderIcon}<ProviderIcon size={13} />{/if}
+          {providerTags(settings.provider)
+            .map((t) => t.text)
+            .join(' · ')}
+        </span>
+        <span class="muted"><kbd>Alt</kbd> + <kbd>A</kbd> {m.popup_shortcut_hint()}</span>
+      </footer>
+    </main>
+  {/key}
 {/if}
 
 <style>

@@ -35,12 +35,13 @@ Bilingual page translators are great for reading foreign-language content, but t
 - **Never breaks layouts.** Before and after inserting a translation, Bilingo measures the surrounding containers. If a translation would overflow a fixed-size card or tab strip, it is withdrawn and shown on hover instead.
 - **Lazy and cheap.** Only paragraphs near the viewport are translated, dynamic content is followed automatically, text that is already in your language is skipped, and every result is cached in IndexedDB.
 - **Six engines**, from free and offline to the LLM of your choice (see below).
+- **English and Chinese interface**, following your browser language or chosen in settings.
 - **Selection translation** from the context menu, a draggable floating button, an "always translate this site" list, 5 translation styles, and light/dark themes.
 
 <p align="center">
-  <img src="docs/images/popup.png" alt="Bilingo popup" height="300">
+  <img src="docs/images/popup-en.png" alt="Bilingo popup" height="300">
   &nbsp;
-  <img src="docs/images/options.png" alt="Bilingo settings" height="300">
+  <img src="docs/images/options-en.png" alt="Bilingo settings" height="300">
 </p>
 
 ## Translation engines
@@ -85,13 +86,13 @@ The Safari build uses a non-persistent background page instead of a service work
 | Action                          | How                                                                                    |
 | ------------------------------- | -------------------------------------------------------------------------------------- |
 | Translate / show original       | Click the floating Bilingo button, press <kbd>Alt</kbd>+<kbd>A</kbd>, or use the popup |
-| Translate a selection           | Select text → right-click → **翻译“…”** (Translate “…”)                                |
+| Translate a selection           | Select text → right-click → **Translate “…”**                                          |
 | Translation that didn't fit     | Text with a dotted underline: hover to see its translation                             |
-| Always translate a site         | Popup → **总是翻译此网站** (Always translate this site)                                |
+| Always translate a site         | Popup → **Always translate this site**                                                 |
 | Move the floating button        | Drag it; it snaps to the nearest edge and remembers its position                       |
 | Change engine, style, shortcuts | Popup → ⚙ settings                                                                     |
 
-> The extension UI is currently in Simplified Chinese (labels above are shown as they appear). Translation itself works for 15 target languages. Interface localization is on the roadmap. Contributions welcome!
+> The interface is available in English and Simplified Chinese. It follows your browser language by default; change it in Settings → Interface language. Pages can be translated into 15 target languages. Want Bilingo in your language? See [CONTRIBUTING.md](CONTRIBUTING.md#translating-the-interface).
 
 ## Privacy
 
@@ -162,7 +163,7 @@ The UI uses modern native CSS (OKLCH colors, `light-dark()`, customizable `<sele
 
 ## Roadmap
 
-- [ ] Interface localization (English UI)
+- [x] Interface localization (English and Simplified Chinese)
 - [ ] Publish to the Chrome Web Store and Edge Add-ons
 - [ ] Local LLM on Safari (Safari 26 supports WebGPU)
 - [ ] Per-site rules (include / exclude selectors)

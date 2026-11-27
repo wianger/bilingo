@@ -19,7 +19,7 @@ jobs:
           cache: npm
       # 跳过依赖的安装脚本（onnxruntime-node 等用不到），只生成 WXT 类型
       - run: npm ci --ignore-scripts
-      - run: npx wxt prepare
+      - run: npm run postinstall
       - run: npm run lint
       - run: npm run check
       - run: npm run format:check

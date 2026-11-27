@@ -1,6 +1,7 @@
 // 浏览器内置 AI：Translator API + Language Detector API（Chrome 138+ / Edge 148+，桌面端，本地模型）
 // 文档：https://developer.chrome.com/docs/ai/translator-api
 // 只能在窗口上下文调用（内容脚本、扩展页面），不能在 service worker 里用。
+import { m } from './i18n';
 import { sameLanguage, toBuiltinCode } from './langs';
 
 export const hasBuiltinTranslator = () => typeof self !== 'undefined' && 'Translator' in self;
@@ -54,7 +55,7 @@ export function getTranslator(source: string, target: string, onProgress?: Downl
     p = (async () => {
       const opts = { sourceLanguage: source, targetLanguage: tgt };
       const a = await Translator.availability(opts);
-      if (a === 'unavailable') throw new Error(`浏览器内置翻译不支持 ${source} → ${tgt}`);
+      if (a === 'unavailable') throw new Error(m.err_builtin_pair({ pair: `${source} → ${tgt}` }));
       try {
         return await Translator.create({
           ...opts,
@@ -64,10 +65,7 @@ export function getTranslator(source: string, target: string, onProgress?: Downl
         });
       } catch (e) {
         if ((e as DOMException).name === 'NotAllowedError') {
-          throw new Error(
-            `${source} → ${tgt} 的语言包尚未下载。请点击网页上的 Bilingo 悬浮按钮重试，或在扩展设置页点击“下载”。`,
-            { cause: e },
-          );
+          throw new Error(m.err_builtin_pack({ pair: `${source} → ${tgt}` }), { cause: e });
         }
         throw e;
       }
@@ -84,7 +82,7 @@ export function getTranslator(source: string, target: string, onProgress?: Downl
  */
 export async function translateBuiltin(texts: string[], target: string, sourceHint = 'en'): Promise<string[]> {
   if (!hasBuiltinTranslator()) {
-    throw new Error('当前浏览器不支持内置 AI 翻译（需要桌面版 Chrome 138+ 或 Edge 148+），请在设置中换一个翻译服务');
+    throw new Error(m.err_builtin_unsupported());
   }
   return Promise.all(
     texts.map(async (text) => {

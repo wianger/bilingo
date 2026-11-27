@@ -86,11 +86,21 @@ const context = await chromium.launchPersistentContext('', {
 });
 const sw = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
 const extId = new URL(sw.url()).host;
-await sw.evaluate(async (baseUrl) => {
-  await chrome.storage.local.set({
-    settings: { provider: 'openai', targetLang: 'zh-CN', openai: { baseUrl, apiKey: 'demo', model: 'deepseek-chat' } },
-  });
-}, `http://127.0.0.1:${port}/v1`);
+const setSettings = (uiLang) =>
+  sw.evaluate(
+    async ([baseUrl, uiLang]) => {
+      await chrome.storage.local.set({
+        settings: {
+          uiLang,
+          provider: 'openai',
+          targetLang: 'zh-CN',
+          openai: { baseUrl, apiKey: 'demo', model: 'deepseek-chat' },
+        },
+      });
+    },
+    [`http://127.0.0.1:${port}/v1`, uiLang],
+  );
+await setSettings('en');
 
 // 1. 双语页面
 const page = await context.newPage();
@@ -103,27 +113,33 @@ await page.waitForTimeout(600);
 await page.screenshot({ path: `${OUT}demo.png` });
 console.log('docs/images/demo.png');
 
-// 2. 弹窗：让弹窗把演示页当作"当前标签页"
-const popup = await context.newPage();
-await popup.addInitScript(() => {
-  const query = chrome.tabs.query.bind(chrome.tabs);
-  chrome.tabs.query = async () => (await query({ url: 'http://blog.example.com/*' })).slice(0, 1);
-});
-await popup.setViewportSize({ width: 340, height: 400 });
-await popup.goto(`chrome-extension://${extId}/popup.html`);
-await popup.locator('main').waitFor();
-await popup.waitForTimeout(500);
-await popup.locator('main').screenshot({ path: `${OUT}popup.png` });
-console.log('docs/images/popup.png');
+// 2 & 3. 弹窗与设置页：英文 README 用英文界面，中文 README 用中文界面
+for (const lang of ['en', 'zh-CN']) {
+  await setSettings(lang);
 
-// 3. 设置页
-const options = await context.newPage();
-await options.setViewportSize({ width: 1200, height: 1000 });
-await options.goto(`chrome-extension://${extId}/options.html`);
-await options.locator('label.provider', { hasText: '本地大模型' }).click();
-await options.waitForTimeout(600);
-await options.screenshot({ path: `${OUT}options.png` });
-console.log('docs/images/options.png');
+  // 弹窗：让弹窗把演示页当作"当前标签页"
+  const popup = await context.newPage();
+  await popup.addInitScript(() => {
+    const query = chrome.tabs.query.bind(chrome.tabs);
+    chrome.tabs.query = async () => (await query({ url: 'http://blog.example.com/*' })).slice(0, 1);
+  });
+  await popup.setViewportSize({ width: 340, height: 400 });
+  await popup.goto(`chrome-extension://${extId}/popup.html`);
+  await popup.locator('main').waitFor();
+  await popup.waitForTimeout(500);
+  await popup.locator('main').screenshot({ path: `${OUT}popup-${lang}.png` });
+  console.log(`docs/images/popup-${lang}.png`);
+
+  const options = await context.newPage();
+  await options.setViewportSize({ width: 1200, height: 1000 });
+  await options.goto(`chrome-extension://${extId}/options.html`);
+  await options.locator('label.provider:has(input[value="local"])').click();
+  await options.waitForTimeout(600);
+  await options.screenshot({ path: `${OUT}options-${lang}.png` });
+  console.log(`docs/images/options-${lang}.png`);
+  await popup.close();
+  await options.close();
+}
 
 await context.close();
 server.close();

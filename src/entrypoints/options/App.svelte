@@ -14,6 +14,8 @@
     type TranslationStyle,
   } from '@/shared/settings';
   import { PROVIDER_ICONS } from '@/ui/provider-icons';
+  import { modelDesc, modelLicense, modelName, providerDesc, providerName, providerTags, styleName } from '@/ui/labels';
+  import { m, setUiLang, uiLocale } from '@/shared/i18n';
   import Check from '@lucide/svelte/icons/check';
   import Database from '@lucide/svelte/icons/database';
   import Download from '@lucide/svelte/icons/download';
@@ -31,13 +33,13 @@
 
   // 常用 OpenAI 兼容服务。模型名会随厂商更新，可点"获取模型列表"从接口实时查询。
   const PRESETS = [
-    { name: 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
-    { name: '智谱 GLM', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash' },
-    { name: '硅基流动', baseUrl: 'https://api.siliconflow.cn/v1', model: 'tencent/Hunyuan-MT-7B' },
-    { name: '阿里百炼', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus' },
-    { name: 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', model: '' },
-    { name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', model: '' },
-    { name: 'Ollama 本地', baseUrl: 'http://localhost:11434/v1', model: 'qwen2.5:7b' },
+    { name: () => 'DeepSeek', baseUrl: 'https://api.deepseek.com/v1', model: 'deepseek-chat' },
+    { name: m.preset_zhipu, baseUrl: 'https://open.bigmodel.cn/api/paas/v4', model: 'glm-4-flash' },
+    { name: m.preset_siliconflow, baseUrl: 'https://api.siliconflow.cn/v1', model: 'tencent/Hunyuan-MT-7B' },
+    { name: m.preset_bailian, baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen-plus' },
+    { name: () => 'OpenRouter', baseUrl: 'https://openrouter.ai/api/v1', model: '' },
+    { name: () => 'OpenAI', baseUrl: 'https://api.openai.com/v1', model: '' },
+    { name: m.preset_ollama, baseUrl: 'http://localhost:11434/v1', model: 'qwen2.5:7b' },
   ];
   const BUILTIN_SOURCES = ['en', 'ja', 'ko', 'fr', 'de', 'es', 'ru', 'zh'];
 
@@ -46,13 +48,25 @@
   let testResult = $state<{ ok: boolean | null; text: string } | null>(null);
   let models = $state<string[]>([]);
   let modelsMsg = $state('');
-  let builtinStatus = $state<Record<string, string>>({});
+  /** 内置翻译各语言对的语言包状态 */
+  type PackState =
+    | { kind: 'available' | 'downloadable' | 'unavailable' }
+    | { kind: 'downloading'; pct?: number }
+    | { kind: 'failed'; msg: string };
+  let builtinStatus = $state<Record<string, PackState>>({});
+  /** 界面语言：变化时整个界面重新渲染 */
+  let lang = $state(uiLocale());
+  $effect(() => {
+    if (!s) return;
+    setUiLang(s.uiLang);
+    lang = uiLocale();
+  });
   let cacheMsg = $state('');
   let localStatus = $state<LocalStatus>({ state: 'idle' });
 
   const MODEL_HOSTS = [
-    { label: 'hf-mirror 镜像（国内推荐）', url: 'https://hf-mirror.com/' },
-    { label: 'Hugging Face 官方', url: 'https://huggingface.co/' },
+    { label: m.host_mirror, url: 'https://hf-mirror.com/' },
+    { label: m.host_hf, url: 'https://huggingface.co/' },
   ];
 
   // 本地模型状态：offscreen 文档存在时可查询，之后通过广播更新
@@ -82,24 +96,32 @@
     }, 300);
   });
 
-  const STATUS_TEXT: Record<string, string> = {
-    available: '已就绪',
-    downloadable: '可下载',
-    downloading: '下载中…',
-    unavailable: '不支持',
-    unsupported: '浏览器不支持',
-  };
+  function packText(st: PackState): string {
+    switch (st.kind) {
+      case 'available':
+        return m.pack_available();
+      case 'downloadable':
+        return m.pack_downloadable();
+      case 'unavailable':
+        return m.pack_unavailable();
+      case 'downloading':
+        return st.pct === undefined ? m.pack_downloading() : m.pack_downloading_pct({ pct: st.pct });
+      case 'failed':
+        return m.failed_with({ msg: st.msg });
+    }
+  }
 
   async function refreshBuiltin() {
     if (!s) return;
     const target = s.targetLang;
-    const next: Record<string, string> = {};
+    const next: Record<string, PackState> = {};
     for (const src of BUILTIN_SOURCES) {
       if (sameLanguage(src, target)) continue;
       try {
-        next[src] = await builtinAvailability(src, target);
-      } catch (e) {
-        next[src] = 'unavailable';
+        const a = await builtinAvailability(src, target);
+        next[src] = { kind: a === 'available' || a === 'downloadable' || a === 'downloading' ? a : 'unavailable' };
+      } catch {
+        next[src] = { kind: 'unavailable' };
       }
     }
     builtinStatus = next;
@@ -107,20 +129,20 @@
 
   async function download(src: string) {
     if (!s) return;
-    builtinStatus[src] = 'downloading';
+    builtinStatus[src] = { kind: 'downloading' };
     try {
       await getTranslator(src, s.targetLang, (loaded) => {
-        builtinStatus[src] = `下载中 ${Math.round(loaded * 100)}%`;
+        builtinStatus[src] = { kind: 'downloading', pct: Math.round(loaded * 100) };
       });
-      builtinStatus[src] = 'available';
+      builtinStatus[src] = { kind: 'available' };
     } catch (e) {
-      builtinStatus[src] = `失败：${(e as Error).message}`;
+      builtinStatus[src] = { kind: 'failed', msg: (e as Error).message };
     }
   }
 
   async function test() {
     if (!s) return;
-    testResult = { ok: null, text: '翻译中…' };
+    testResult = { ok: null, text: m.translating() };
     const sample = s.targetLang.startsWith('zh')
       ? 'Bilingual translation keeps the original text right next to its translation.'
       : '双语对照翻译会把译文放在原文旁边。';
@@ -139,18 +161,18 @@
 
   async function fetchModels() {
     if (!s) return;
-    modelsMsg = '获取中…';
+    modelsMsg = m.openai_models_loading();
     try {
       models = await sendMessage('listModels', { baseUrl: s.openai.baseUrl, apiKey: s.openai.apiKey });
-      modelsMsg = models.length ? `共 ${models.length} 个模型，可在输入框下拉选择` : '接口没有返回模型';
+      modelsMsg = models.length ? m.openai_models_found({ n: models.length }) : m.openai_models_none();
     } catch (e) {
-      modelsMsg = `失败：${(e as Error).message}`;
+      modelsMsg = m.failed_with({ msg: (e as Error).message });
     }
   }
 
   async function clearCache() {
     await sendMessage('clearCache', undefined);
-    cacheMsg = '已清空';
+    cacheMsg = m.cache_cleared();
   }
 
   const hasWebGPU = 'gpu' in navigator;
@@ -158,17 +180,21 @@
   function describeLocal(st: LocalStatus): string {
     switch (st.state) {
       case 'idle':
-        return '未加载';
+        return m.local_state_idle();
       case 'downloading': {
         const mb = (n: number) => (n / 1e6).toFixed(0);
-        if (st.total === 0) return '正在准备模型文件…';
-        if (st.waiting > 0) return `已下载 ${mb(st.loaded)} MB，正在连接下载服务器…`;
-        return `下载中 ${(st.progress * 100).toFixed(1)}%（${mb(st.loaded)} / ${mb(st.total)} MB）`;
+        if (st.total === 0) return m.local_state_preparing();
+        if (st.waiting > 0) return m.local_state_connecting({ mb: mb(st.loaded) });
+        return m.local_state_downloading({
+          pct: (st.progress * 100).toFixed(1),
+          loaded: mb(st.loaded),
+          total: mb(st.total),
+        });
       }
       case 'loading':
-        return '正在加载到显卡…';
+        return m.local_state_loading();
       case 'ready':
-        return `已就绪 · ${st.adapter} · ${st.dtype}`;
+        return m.local_state_ready({ adapter: st.adapter, dtype: st.dtype });
       case 'error':
         return st.message;
     }
@@ -235,23 +261,17 @@
         if (req.url.includes(`/${repo}/`) && (await cache.delete(req))) n++;
       }
     }
-    localMsg = n ? `已删除 ${repo} 的 ${n} 个文件` : '本机没有该模型的文件';
+    localMsg = n ? m.local_deleted({ n, repo }) : m.local_none_found();
     await refreshModelFiles();
   }
 
-  const STYLES: { id: TranslationStyle; name: string }[] = [
-    { id: 'faded', name: '淡化' },
-    { id: 'plain', name: '普通' },
-    { id: 'underline', name: '虚线' },
-    { id: 'highlight', name: '高亮' },
-    { id: 'quote', name: '引用线' },
-  ];
+  const STYLES: TranslationStyle[] = ['faded', 'plain', 'underline', 'highlight', 'quote'];
 
   const NAV = [
-    { id: 'general', name: '基础', icon: Languages },
-    { id: 'provider', name: '翻译服务', icon: Sparkles },
-    { id: 'sites', name: '网站', icon: List },
-    { id: 'other', name: '其他', icon: Database },
+    { id: 'general', name: m.nav_general, icon: Languages },
+    { id: 'provider', name: m.nav_engine, icon: Sparkles },
+    { id: 'sites', name: m.nav_sites, icon: List },
+    { id: 'other', name: m.nav_other, icon: Database },
   ];
   let current = $state('general');
   // 滚动时高亮当前所在分区（scroll-margin 与 rootMargin 对齐）
@@ -274,355 +294,363 @@
 </script>
 
 {#if s}
-  <div class="layout">
-    <aside>
-      <div class="brand">
-        <img src="/icon/48.png" alt="" width="32" height="32" />
-        <div>
-          <b>Bilingo</b>
-          <span class="muted">双语网页翻译</span>
+  {#key lang}
+    <div class="layout">
+      <aside>
+        <div class="brand">
+          <img src="/icon/48.png" alt="" width="32" height="32" />
+          <div>
+            <b>Bilingo</b>
+            <span class="muted">{m.app_tagline()}</span>
+          </div>
         </div>
-      </div>
-      <nav>
-        {#each NAV as n (n.id)}
-          <a href="#{n.id}" class:active={current === n.id}><n.icon size={16} />{n.name}</a>
-        {/each}
-      </nav>
-      <p class="muted privacy"><ShieldCheck size={14} /> 设置与密钥只保存在本机</p>
-    </aside>
+        <nav>
+          {#each NAV as n (n.id)}
+            <a href="#{n.id}" class:active={current === n.id}><n.icon size={16} />{n.name()}</a>
+          {/each}
+        </nav>
+        <p class="muted privacy"><ShieldCheck size={14} /> {m.opt_privacy()}</p>
+      </aside>
 
-    <main>
-      <header>
-        <h1>设置</h1>
-        <span class="saved" class:show={saved}><Check size={14} /> 已自动保存</span>
-      </header>
+      <main>
+        <header>
+          <h1>{m.settings()}</h1>
+          <span class="saved" class:show={saved}><Check size={14} /> {m.opt_saved()}</span>
+        </header>
 
-      <section id="general" class="card">
-        <h2><Languages size={18} /> 基础</h2>
-        <label class="field">
-          <span>目标语言</span>
-          <select class="select" bind:value={s.targetLang} onchange={refreshBuiltin}>
-            {#each LANGS as l (l.code)}<option value={l.code}>{l.name}</option>{/each}
-          </select>
-        </label>
+        <section id="general" class="card">
+          <h2><Languages size={18} /> {m.nav_general()}</h2>
+          <div class="grid2">
+            <label class="field">
+              <span>{m.target_language()}</span>
+              <select class="select" bind:value={s.targetLang} onchange={refreshBuiltin}>
+                {#each LANGS as l (l.code)}<option value={l.code}>{l.name}</option>{/each}
+              </select>
+            </label>
+            <label class="field">
+              <span>{m.opt_ui_language()}</span>
+              <select class="select" bind:value={s.uiLang}>
+                <option value="auto">{m.opt_ui_auto()}</option>
+                <option value="en">English</option>
+                <option value="zh-CN">简体中文</option>
+              </select>
+            </label>
+          </div>
 
-        <div class="field">
-          <span><Palette size={13} /> 译文样式</span>
-          <div class="styles" role="radiogroup" aria-label="译文样式">
-            {#each STYLES as st (st.id)}
-              <label class="style-card" class:selected={s.style === st.id}>
-                <input type="radio" name="style" value={st.id} bind:group={s.style} />
-                <span class="sample-src">Hello world</span>
-                <span class="sample-tr tr-{st.id}">你好，世界</span>
-                <span class="style-name">{st.name}</span>
+          <div class="field">
+            <span><Palette size={13} /> {m.opt_style()}</span>
+            <div class="styles" role="radiogroup" aria-label={m.opt_style()}>
+              {#each STYLES as st (st)}
+                <label class="style-card" class:selected={s.style === st}>
+                  <input type="radio" name="style" value={st} bind:group={s.style} />
+                  <span class="sample-src">Hello world</span>
+                  <span class="sample-tr tr-{st}">你好，世界</span>
+                  <span class="style-name">{styleName(st)}</span>
+                </label>
+              {/each}
+            </div>
+          </div>
+
+          <label class="row">
+            <div>
+              <div>{m.opt_main_only()}</div>
+              <div class="muted">{m.opt_main_only_desc()}</div>
+            </div>
+            <input
+              type="checkbox"
+              class="switch"
+              checked={s.scope !== 'all'}
+              onchange={(e) => (s!.scope = e.currentTarget.checked ? 'smart' : 'all')}
+            />
+          </label>
+
+          <label class="row">
+            <div>
+              <div>{m.opt_float_ball()}</div>
+              <div class="muted">{m.opt_float_ball_desc()}</div>
+            </div>
+            <input type="checkbox" class="switch" bind:checked={s.floatBall} />
+          </label>
+        </section>
+
+        <section id="provider" class="card">
+          <h2><Sparkles size={18} /> {m.translation_engine()}</h2>
+          <div class="providers" role="radiogroup" aria-label={m.translation_engine()}>
+            {#each Object.keys(PROVIDERS_META) as ProviderId[] as id (id)}
+              {@const Icon = PROVIDER_ICONS[id]}
+              <label class="provider" class:selected={s.provider === id}>
+                <input type="radio" name="provider" value={id} bind:group={s.provider} />
+                <span class="p-icon"><Icon size={18} /></span>
+                <span class="p-body">
+                  <b>{providerName(id)}</b>
+                  <span class="muted">{providerDesc(id)}</span>
+                  <span class="tags">
+                    {#each providerTags(id) as t (t.text)}<span class="badge" class:ok={t.free}>{t.text}</span>{/each}
+                  </span>
+                </span>
               </label>
             {/each}
           </div>
-        </div>
 
-        <label class="row">
-          <div>
-            <div>只翻译正文</div>
-            <div class="muted">
-              跳过导航栏、菜单、按钮、页眉页脚和代码标识符等，不翻译网页的“界面文字”。关闭后翻译页面上的所有文字
-            </div>
-          </div>
-          <input
-            type="checkbox"
-            class="switch"
-            checked={s.scope !== 'all'}
-            onchange={(e) => (s!.scope = e.currentTarget.checked ? 'smart' : 'all')}
-          />
-        </label>
-
-        <label class="row">
-          <div>
-            <div>悬浮翻译按钮</div>
-            <div class="muted">在网页边缘显示可拖动的 Bilingo 图标按钮</div>
-          </div>
-          <input type="checkbox" class="switch" bind:checked={s.floatBall} />
-        </label>
-      </section>
-
-      <section id="provider" class="card">
-        <h2><Sparkles size={18} /> 翻译服务</h2>
-        <div class="providers" role="radiogroup" aria-label="翻译服务">
-          {#each Object.entries(PROVIDERS_META) as [id, m] (id)}
-            {@const Icon = PROVIDER_ICONS[id as ProviderId]}
-            <label class="provider" class:selected={s.provider === id}>
-              <input type="radio" name="provider" value={id} bind:group={s.provider} />
-              <span class="p-icon"><Icon size={18} /></span>
-              <span class="p-body">
-                <b>{m.name}</b>
-                <span class="muted">{m.desc}</span>
-                <span class="tags">
-                  {#each m.tags as t (t)}<span class="badge" class:ok={t === '免费'}>{t}</span>{/each}
-                </span>
-              </span>
-            </label>
-          {/each}
-        </div>
-
-        <div class="panel">
-          {#if s.provider === 'builtin'}
-            <p class="muted">
-              使用 Chrome 138+ / Edge 148+
-              自带的本地翻译模型：完全免费、不联网、文本不出本机。每个语言对首次使用需下载语言包。
-            </p>
-            {#if !hasBuiltinTranslator()}
-              <p class="alert err">当前浏览器不支持内置翻译，请换用其他翻译服务。</p>
-            {/if}
-            <div class="pairs">
-              {#each Object.entries(builtinStatus) as [src, st] (src)}
-                <div class="pair">
-                  <span>{LANGS.find((l) => l.code === src || l.code.startsWith(src + '-'))?.name ?? src}</span>
-                  <span class="muted">→ 目标语言</span>
-                  <span
-                    class="badge"
-                    class:ok={st === 'available'}
-                    class:accent={st.startsWith('下载中') || st === 'downloading'}
-                    class:err={st.startsWith('失败')}
-                  >
-                    {STATUS_TEXT[st] ?? st}
-                  </span>
-                  {#if st === 'downloadable'}
-                    <button class="btn sm" onclick={() => download(src)}><Download size={13} /> 下载</button>
-                  {:else}
-                    <span></span>
-                  {/if}
-                </div>
-              {/each}
-            </div>
-          {/if}
-
-          {#if s.provider === 'local'}
-            <p class="muted">
-              在你的显卡上运行开源翻译模型：免费、离线、文本不出本机。首次使用需下载模型，之后从本地缓存加载；空闲 10
-              分钟后自动卸载以释放显存。需要支持 WebGPU 的 Chrome / Edge 桌面版。
-            </p>
-            {#if !hasWebGPU}<p class="alert err">当前浏览器不支持 WebGPU，无法使用本地大模型。</p>{/if}
-            <div class="grid2">
-              <label class="field">
-                <span>模型</span>
-                <select
-                  class="select"
-                  value={customModel || !preset ? '__custom' : preset.repo}
-                  onchange={(e) => chooseModel(e.currentTarget.value)}
-                >
-                  {#each LOCAL_MODELS as m (m.repo)}
-                    <option value={m.repo}>{m.name}</option>
-                  {/each}
-                  <option value="__custom">自定义…</option>
-                </select>
-              </label>
-              <label class="field">
-                <span>模型下载源</span>
-                <select class="select" bind:value={s.local.host}>
-                  {#each MODEL_HOSTS as h (h.url)}<option value={h.url}>{h.label}</option>{/each}
-                </select>
-              </label>
-            </div>
-
-            {#if customModel || !preset}
-              <label class="field">
-                <span>
-                  Hugging Face 仓库 id（需为 Transformers.js 可加载的 ONNX 文本生成模型，按 Hy-MT 指令格式调用）
-                </span>
-                <input class="input" placeholder="例如 drnfns/Hy-MT2-1.8B-ONNX" bind:value={s.local.model} />
-              </label>
-            {/if}
-
-            <div class="model-info">
-              {#if preset && !customModel}
-                <p>{preset.desc}</p>
-                <div class="tags">
-                  <span class="badge">约 {(preset.sizeMB / 1000).toFixed(1)} GB</span>
-                  <span class="badge">{preset.license}</span>
-                  {#if preset.experimental}<span class="badge accent">实验性</span>{/if}
-                  {#if modelFiles[preset.repo] === 'done'}<span class="badge ok">已下载</span>
-                  {:else if modelFiles[preset.repo] === 'partial'}<span class="badge accent">已下载一部分，可续传</span>
-                  {:else}<span class="badge">未下载</span>{/if}
-                </div>
-              {:else}
-                <p>自定义模型未经测试，翻译效果取决于模型本身。</p>
+          <div class="panel">
+            {#if s.provider === 'builtin'}
+              <p class="muted">{m.builtin_desc()}</p>
+              {#if !hasBuiltinTranslator()}
+                <p class="alert err">{m.builtin_unsupported_alert()}</p>
               {/if}
-            </div>
-
-            <div class="status" data-state={localStatus.state}>
-              <div class="status-line">
-                {#if localBusy}<LoaderCircle size={15} class="spin" />{:else if localStatus.state === 'ready'}<Check
-                    size={15}
-                  />{:else}<Power size={15} />{/if}
-                <span>{describeLocal(localStatus)}</span>
-              </div>
-              {#if localStatus.state === 'downloading'}
-                <div class="progress"><div style:width="{localStatus.progress * 100}%"></div></div>
-              {:else if localStatus.state === 'loading'}
-                <div class="progress indeterminate"><div></div></div>
-              {/if}
-            </div>
-
-            <div class="actions">
-              <button class="btn primary" onclick={prepareLocal} disabled={localBusy}>
-                <Download size={15} /> 下载 / 加载模型
-              </button>
-              <button class="btn" onclick={unloadLocal}><Power size={15} /> 卸载（释放显存）</button>
-              <button class="btn danger" onclick={deleteLocalModel}><Trash2 size={15} /> 删除此模型文件</button>
-            </div>
-            {#if localMsg}<p class="muted">{localMsg}</p>{/if}
-          {/if}
-
-          {#if s.provider === 'openai'}
-            <p class="muted">API Key 只保存在本机浏览器，请求直接发往你填写的接口地址，不经过任何第三方服务器。</p>
-            <div class="field">
-              <span>快速填入</span>
-              <div class="presets">
-                {#each PRESETS as p (p.name)}
-                  <button
-                    class="btn sm"
-                    class:on={s.openai.baseUrl === p.baseUrl}
-                    onclick={() => ((s!.openai.baseUrl = p.baseUrl), (s!.openai.model = p.model))}
-                  >
-                    {p.name}
-                  </button>
+              <div class="pairs">
+                {#each Object.entries(builtinStatus) as [src, st] (src)}
+                  <div class="pair">
+                    <span>{LANGS.find((l) => l.code === src || l.code.startsWith(src + '-'))?.name ?? src}</span>
+                    <span class="muted">{m.builtin_to_target()}</span>
+                    <span
+                      class="badge"
+                      class:ok={st.kind === 'available'}
+                      class:accent={st.kind === 'downloading'}
+                      class:err={st.kind === 'failed'}
+                    >
+                      {packText(st)}
+                    </span>
+                    {#if st.kind === 'downloadable'}
+                      <button class="btn sm" onclick={() => download(src)}>
+                        <Download size={13} />
+                        {m.download()}
+                      </button>
+                    {:else}
+                      <span></span>
+                    {/if}
+                  </div>
                 {/each}
               </div>
-            </div>
-            <label class="field">
-              <span>接口地址 Base URL</span><input class="input" bind:value={s.openai.baseUrl} />
-            </label>
-            <label class="field">
-              <span><KeyRound size={13} /> API Key</span>
-              <input class="input" type="password" autocomplete="off" bind:value={s.openai.apiKey} />
-            </label>
-            <div class="field">
-              <span>模型</span>
-              <div class="inline">
-                <input class="input" list="models" aria-label="模型" bind:value={s.openai.model} />
-                <button class="btn" onclick={fetchModels}>获取模型列表</button>
-              </div>
-              <datalist id="models">
-                {#each models as m (m)}<option value={m}></option>{/each}
-              </datalist>
-              {#if modelsMsg}<span class="muted">{modelsMsg}</span>{/if}
-            </div>
-            <details>
-              <summary>高级设置</summary>
-              <div class="grid4">
-                <label class="field">
-                  <span>温度（留空不传）</span>
-                  <input
-                    class="input"
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="2"
-                    value={s.openai.temperature ?? ''}
-                    oninput={(e) =>
-                      (s!.openai.temperature = e.currentTarget.value === '' ? null : Number(e.currentTarget.value))}
-                  />
-                </label>
-                <label class="field">
-                  <span>每批字符数</span>
-                  <input class="input" type="number" min="200" step="100" bind:value={s.openai.maxBatchChars} />
-                </label>
-                <label class="field">
-                  <span>每批段落数</span>
-                  <input class="input" type="number" min="1" max="50" bind:value={s.openai.maxBatchItems} />
-                </label>
-                <label class="field">
-                  <span>并发请求数</span>
-                  <input class="input" type="number" min="1" max="20" bind:value={s.openai.concurrency} />
-                </label>
-              </div>
-              <label class="field">
-                <span>额外提示词（可选：术语表、语气要求等）</span>
-                <textarea
-                  class="input"
-                  rows="3"
-                  placeholder="例如：将 agent 统一译为“智能体”；语气自然口语化。"
-                  bind:value={s.openai.prompt}></textarea>
-              </label>
-              <p class="muted">
-                使用 Ollama 本地模型时，需要以环境变量 <code>OLLAMA_ORIGINS=chrome-extension://*</code> 启动 Ollama，否则会被跨域拦截。
-              </p>
-            </details>
-          {/if}
-
-          {#if s.provider === 'azure'}
-            <p class="muted">
-              在 Azure 门户创建 Translator 资源，选择 F0 免费定价层（每月 200 万字符），把“密钥”和“位置/区域”填到下面。
-            </p>
-            <div class="grid2">
-              <label class="field">
-                <span><KeyRound size={13} /> 密钥</span>
-                <input class="input" type="password" autocomplete="off" bind:value={s.azure.key} />
-              </label>
-              <label class="field">
-                <span>区域（如 eastasia，全局资源可留空）</span><input class="input" bind:value={s.azure.region} />
-              </label>
-            </div>
-          {/if}
-
-          {#if s.provider === 'deepl'}
-            <p class="muted">
-              在 DeepL 官网注册 API Free 账号获取密钥（Free 密钥以 :fx 结尾，会自动使用免费接口地址）。
-            </p>
-            <label class="field">
-              <span><KeyRound size={13} /> API 密钥</span>
-              <input class="input" type="password" autocomplete="off" bind:value={s.deepl.key} />
-            </label>
-          {/if}
-
-          {#if s.provider === 'google'}
-            <p class="muted">无需配置。使用谷歌翻译网页版的免费接口，需要当前网络能访问谷歌。</p>
-          {/if}
-
-          <div class="test">
-            <button class="btn" onclick={test} disabled={testResult?.ok === null}>
-              {#if testResult?.ok === null}<LoaderCircle size={15} class="spin" />{:else}<FlaskConical size={15} />{/if}
-              测试当前服务
-            </button>
-            {#if testResult && testResult.ok !== null}
-              <span class="test-result" class:ok={testResult.ok} class:err={!testResult.ok}>{testResult.text}</span>
             {/if}
-          </div>
-        </div>
-      </section>
 
-      <section id="sites" class="card">
-        <h2><Globe size={18} /> 总是翻译的网站</h2>
-        <label class="field">
-          <span>每行一个域名，例如 news.ycombinator.com。打开这些网站时自动翻译。</span>
-          <textarea
-            class="input"
-            rows="4"
-            value={s.autoSites.join('\n')}
-            onchange={(e) => (s!.autoSites = e.currentTarget.value.split(/\s+/).filter(Boolean))}></textarea>
-        </label>
-      </section>
+            {#if s.provider === 'local'}
+              <p class="muted">{m.local_desc()}</p>
+              {#if !hasWebGPU}<p class="alert err">{m.local_no_webgpu_alert()}</p>{/if}
+              <div class="grid2">
+                <label class="field">
+                  <span>{m.local_model()}</span>
+                  <select
+                    class="select"
+                    value={customModel || !preset ? '__custom' : preset.repo}
+                    onchange={(e) => chooseModel(e.currentTarget.value)}
+                  >
+                    {#each LOCAL_MODELS as lm (lm.repo)}
+                      <option value={lm.repo}>{modelName(lm)}</option>
+                    {/each}
+                    <option value="__custom">{m.local_custom()}</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>{m.local_source()}</span>
+                  <select class="select" bind:value={s.local.host}>
+                    {#each MODEL_HOSTS as h (h.url)}<option value={h.url}>{h.label()}</option>{/each}
+                  </select>
+                </label>
+              </div>
 
-      <section id="other" class="card">
-        <h2><Database size={18} /> 其他</h2>
-        <div class="row">
-          <div>
-            <div>快捷键</div>
-            <div class="muted">
-              默认 <kbd>Alt</kbd> + <kbd>A</kbd>，可在 <code>edge://extensions/shortcuts</code> 或
-              <code>chrome://extensions/shortcuts</code> 修改
+              {#if customModel || !preset}
+                <label class="field">
+                  <span>{m.local_custom_repo()}</span>
+                  <input class="input" placeholder={m.local_custom_placeholder()} bind:value={s.local.model} />
+                </label>
+              {/if}
+
+              <div class="model-info">
+                {#if preset && !customModel}
+                  <p>{modelDesc(preset)}</p>
+                  <div class="tags">
+                    <span class="badge">{m.local_size({ size: (preset.sizeMB / 1000).toFixed(1) })}</span>
+                    <span class="badge">{modelLicense(preset)}</span>
+                    {#if preset.experimental}<span class="badge accent">{m.local_experimental()}</span>{/if}
+                    {#if modelFiles[preset.repo] === 'done'}<span class="badge ok">{m.local_downloaded()}</span>
+                    {:else if modelFiles[preset.repo] === 'partial'}<span class="badge accent">
+                        {m.local_partial()}
+                      </span>
+                    {:else}<span class="badge">{m.local_not_downloaded()}</span>{/if}
+                  </div>
+                {:else}
+                  <p>{m.local_custom_untested()}</p>
+                {/if}
+              </div>
+
+              <div class="status" data-state={localStatus.state}>
+                <div class="status-line">
+                  {#if localBusy}<LoaderCircle size={15} class="spin" />{:else if localStatus.state === 'ready'}<Check
+                      size={15}
+                    />{:else}<Power size={15} />{/if}
+                  <span>{describeLocal(localStatus)}</span>
+                </div>
+                {#if localStatus.state === 'downloading'}
+                  <div class="progress"><div style:width="{localStatus.progress * 100}%"></div></div>
+                {:else if localStatus.state === 'loading'}
+                  <div class="progress indeterminate"><div></div></div>
+                {/if}
+              </div>
+
+              <div class="actions">
+                <button class="btn primary" onclick={prepareLocal} disabled={localBusy}>
+                  <Download size={15} />
+                  {m.local_load()}
+                </button>
+                <button class="btn" onclick={unloadLocal}><Power size={15} /> {m.local_unload()}</button>
+                <button class="btn danger" onclick={deleteLocalModel}><Trash2 size={15} /> {m.local_delete()}</button>
+              </div>
+              {#if localMsg}<p class="muted">{localMsg}</p>{/if}
+            {/if}
+
+            {#if s.provider === 'openai'}
+              <p class="muted">{m.openai_desc()}</p>
+              <div class="field">
+                <span>{m.openai_presets()}</span>
+                <div class="presets">
+                  {#each PRESETS as p (p.baseUrl)}
+                    <button
+                      class="btn sm"
+                      class:on={s.openai.baseUrl === p.baseUrl}
+                      onclick={() => ((s!.openai.baseUrl = p.baseUrl), (s!.openai.model = p.model))}
+                    >
+                      {p.name()}
+                    </button>
+                  {/each}
+                </div>
+              </div>
+              <label class="field">
+                <span>{m.openai_base_url()}</span><input class="input" bind:value={s.openai.baseUrl} />
+              </label>
+              <label class="field">
+                <span><KeyRound size={13} /> {m.openai_api_key()}</span>
+                <input class="input" type="password" autocomplete="off" bind:value={s.openai.apiKey} />
+              </label>
+              <div class="field">
+                <span>{m.local_model()}</span>
+                <div class="inline">
+                  <input class="input" list="models" aria-label={m.local_model()} bind:value={s.openai.model} />
+                  <button class="btn" onclick={fetchModels}>{m.openai_fetch_models()}</button>
+                </div>
+                <datalist id="models">
+                  {#each models as m (m)}<option value={m}></option>{/each}
+                </datalist>
+                {#if modelsMsg}<span class="muted">{modelsMsg}</span>{/if}
+              </div>
+              <details>
+                <summary>{m.openai_advanced()}</summary>
+                <div class="grid4">
+                  <label class="field">
+                    <span>{m.openai_temperature()}</span>
+                    <input
+                      class="input"
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="2"
+                      value={s.openai.temperature ?? ''}
+                      oninput={(e) =>
+                        (s!.openai.temperature = e.currentTarget.value === '' ? null : Number(e.currentTarget.value))}
+                    />
+                  </label>
+                  <label class="field">
+                    <span>{m.openai_batch_chars()}</span>
+                    <input class="input" type="number" min="200" step="100" bind:value={s.openai.maxBatchChars} />
+                  </label>
+                  <label class="field">
+                    <span>{m.openai_batch_items()}</span>
+                    <input class="input" type="number" min="1" max="50" bind:value={s.openai.maxBatchItems} />
+                  </label>
+                  <label class="field">
+                    <span>{m.openai_concurrency()}</span>
+                    <input class="input" type="number" min="1" max="20" bind:value={s.openai.concurrency} />
+                  </label>
+                </div>
+                <label class="field">
+                  <span>{m.openai_prompt()}</span>
+                  <textarea
+                    class="input"
+                    rows="3"
+                    placeholder={m.openai_prompt_placeholder()}
+                    bind:value={s.openai.prompt}></textarea>
+                </label>
+                <p class="muted">
+                  {m.openai_ollama_before()} <code>OLLAMA_ORIGINS=chrome-extension://*</code>
+                  {m.openai_ollama_after()}
+                </p>
+              </details>
+            {/if}
+
+            {#if s.provider === 'azure'}
+              <p class="muted">{m.azure_desc()}</p>
+              <div class="grid2">
+                <label class="field">
+                  <span><KeyRound size={13} /> {m.azure_key()}</span>
+                  <input class="input" type="password" autocomplete="off" bind:value={s.azure.key} />
+                </label>
+                <label class="field">
+                  <span>{m.azure_region()}</span><input class="input" bind:value={s.azure.region} />
+                </label>
+              </div>
+            {/if}
+
+            {#if s.provider === 'deepl'}
+              <p class="muted">{m.deepl_desc()}</p>
+              <label class="field">
+                <span><KeyRound size={13} /> {m.deepl_key()}</span>
+                <input class="input" type="password" autocomplete="off" bind:value={s.deepl.key} />
+              </label>
+            {/if}
+
+            {#if s.provider === 'google'}
+              <p class="muted">{m.google_desc()}</p>
+            {/if}
+
+            <div class="test">
+              <button class="btn" onclick={test} disabled={testResult?.ok === null}>
+                {#if testResult?.ok === null}<LoaderCircle size={15} class="spin" />{:else}<FlaskConical
+                    size={15}
+                  />{/if}
+                {m.test_engine()}
+              </button>
+              {#if testResult && testResult.ok !== null}
+                <span class="test-result" class:ok={testResult.ok} class:err={!testResult.ok}>{testResult.text}</span>
+              {/if}
             </div>
           </div>
-        </div>
-        <div class="row">
-          <div>
-            <div>翻译缓存</div>
-            <div class="muted">已翻译过的段落会缓存在本机，再次访问时秒开。{cacheMsg}</div>
+        </section>
+
+        <section id="sites" class="card">
+          <h2><Globe size={18} /> {m.sites_title()}</h2>
+          <label class="field">
+            <span>{m.sites_desc()}</span>
+            <textarea
+              class="input"
+              rows="4"
+              value={s.autoSites.join('\n')}
+              onchange={(e) => (s!.autoSites = e.currentTarget.value.split(/\s+/).filter(Boolean))}></textarea>
+          </label>
+        </section>
+
+        <section id="other" class="card">
+          <h2><Database size={18} /> {m.nav_other()}</h2>
+          <div class="row">
+            <div>
+              <div>{m.shortcut_title()}</div>
+              <div class="muted">{m.shortcut_default()} <kbd>Alt</kbd> + <kbd>A</kbd></div>
+              <div class="muted">
+                {m.shortcut_change()} <code>edge://extensions/shortcuts</code> ·
+                <code>chrome://extensions/shortcuts</code>
+              </div>
+            </div>
           </div>
-          <button class="btn danger" onclick={clearCache}><Trash2 size={15} /> 清空缓存</button>
-        </div>
-      </section>
-    </main>
-  </div>
+          <div class="row">
+            <div>
+              <div>{m.cache_title()}</div>
+              <div class="muted">{m.cache_desc()} {cacheMsg}</div>
+            </div>
+            <button class="btn danger" onclick={clearCache}><Trash2 size={15} /> {m.cache_clear()}</button>
+          </div>
+        </section>
+      </main>
+    </div>
+  {/key}
 {/if}
 
 <style>

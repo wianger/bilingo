@@ -1,3 +1,5 @@
+import { m } from '@/shared/i18n';
+
 export class TranslateError extends Error {
   constructor(
     message: string,
@@ -13,7 +15,7 @@ export async function request(url: string, init: RequestInit, label: string): Pr
   try {
     res = await fetch(url, init);
   } catch (e) {
-    throw new TranslateError(`${label} 网络错误：${(e as Error).message}`, 0, true);
+    throw new TranslateError(m.err_network({ label, msg: (e as Error).message }), 0, true);
   }
   if (!res.ok) {
     let detail = '';

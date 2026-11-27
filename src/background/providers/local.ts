@@ -1,4 +1,6 @@
 // 本地大模型（Hy-MT2 + WebGPU），实际推理在 offscreen 文档的 Worker 中进行
+import { uiLocale } from '@/shared/i18n';
+import { m } from '@/shared/i18n';
 import { findPreset, formatOf } from '@/local-llm/models';
 import type { LocalModelConfig } from '@/local-llm/protocol';
 import { sendMessage } from '@/shared/messaging';
@@ -14,7 +16,7 @@ function hasOffscreen(): boolean {
 
 export async function ensureOffscreen(): Promise<void> {
   if (!hasOffscreen()) {
-    throw new TranslateError('当前浏览器不支持本地大模型（需要 Chrome / Edge 的 offscreen API，Safari 暂不支持）');
+    throw new TranslateError(m.err_no_offscreen());
   }
   const contexts = await browser.runtime.getContexts({
     contextTypes: [browser.runtime.ContextType.OFFSCREEN_DOCUMENT],
@@ -38,7 +40,7 @@ export async function closeOffscreen(): Promise<void> {
 
 export function localConfig(s: Settings): LocalModelConfig {
   const model = s.local.model.trim();
-  return { model, host: s.local.host, format: formatOf(model), dtype: findPreset(model)?.dtype };
+  return { model, host: s.local.host, format: formatOf(model), dtype: findPreset(model)?.dtype, locale: uiLocale() };
 }
 
 /** 用浏览器自带的 CLD3 识别原文语言（TranslateGemma 需要知道原文语言） */

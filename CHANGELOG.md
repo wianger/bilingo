@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- English interface. The UI follows the browser language by default and can be switched in Settings → Interface language, taking effect immediately in the popup, settings page, in-page button and context menus. Built with Paraglide JS (compile-time, type-safe messages); the extension name and description are localized through `_locales`.
+
 ## [0.2.0] - 2026-11-28
 
 First public version.

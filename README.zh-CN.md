@@ -35,12 +35,13 @@
 - **不破坏网页布局**：插入译文前后测量周围容器。如果译文会让固定尺寸的卡片、标签条溢出，就撤回译文，改为虚线提示，鼠标悬停显示。
 - **省钱**：只翻译进入视口附近的段落，自动跟随动态加载的内容，跳过已是目标语言的段落，翻译结果缓存在本地（IndexedDB），同一段文字不重复花钱。
 - **6 种翻译引擎**：从免费离线到任选大模型，见下表。
+- **中英文界面**：默认跟随浏览器语言，也可在设置中切换。
 - 右键划词翻译、可拖动的悬浮按钮、“总是翻译此网站”、5 种译文样式、浅色 / 深色模式。
 
 <p align="center">
-  <img src="docs/images/popup.png" alt="Bilingo 弹窗" height="300">
+  <img src="docs/images/popup-zh-CN.png" alt="Bilingo 弹窗" height="300">
   &nbsp;
-  <img src="docs/images/options.png" alt="Bilingo 设置页" height="300">
+  <img src="docs/images/options-zh-CN.png" alt="Bilingo 设置页" height="300">
 </p>
 
 ## 翻译引擎
@@ -162,7 +163,7 @@ src/
 
 ## 路线图
 
-- [ ] 界面多语言（英文界面）
+- [x] 界面多语言（英文、简体中文）
 - [ ] 上架 Chrome 应用商店和 Edge 加载项商店
 - [ ] Safari 上的本地大模型（Safari 26 已支持 WebGPU）
 - [ ] 按网站自定义规则（翻译 / 不翻译哪些元素）

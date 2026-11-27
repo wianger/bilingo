@@ -280,3 +280,32 @@ test('on article pages only the main content and the headline are translated', a
   });
   await expect(page.locator('#promo .bilingo-tr')).toBeVisible();
 });
+
+test('interface language follows the browser and can be switched in settings', async ({ context, sw }) => {
+  const id = new URL(sw.url()).host;
+  const options = await context.newPage();
+  await options.goto(`chrome-extension://${id}/options.html`);
+  // Playwright 的 Chromium 是 en-US：默认英文界面
+  await expect(options.locator('h1')).toHaveText('Settings');
+
+  // 在设置页切换为简体中文：立即生效，无需刷新
+  await options.locator('select').nth(1).selectOption('zh-CN');
+  await expect(options.locator('h1')).toHaveText('设置');
+  await expect(options.getByText('只翻译正文')).toBeVisible();
+
+  // 弹窗与网页上的悬浮按钮也跟随（等设置自动保存后）
+  await expect
+    .poll(() => sw.evaluate(async () => (await chrome.storage.local.get('settings')).settings as { uiLang?: string }))
+    .toMatchObject({ uiLang: 'zh-CN' });
+  const popup = await context.newPage();
+  await popup.goto(`chrome-extension://${id}/popup.html`);
+  await expect(popup.getByText('目标语言')).toBeVisible();
+  const page = await context.newPage();
+  await page.goto(`${origin}/page`);
+  await expect(page.locator('#bilingo-host').locator('.ball')).toHaveAttribute('aria-label', 'Bilingo 翻译');
+
+  // 切回英文
+  await options.locator('select').nth(1).selectOption('en');
+  await expect(options.locator('h1')).toHaveText('Settings');
+  await expect(page.locator('#bilingo-host').locator('.ball')).toHaveAttribute('aria-label', 'Bilingo translate');
+});

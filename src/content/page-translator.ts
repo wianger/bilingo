@@ -1,4 +1,5 @@
 // 页面翻译调度：段落进入视口 → 语言检测 → 分批翻译 → 插入译文；同时监听动态内容
+import { m } from '@/shared/i18n';
 import { detectLanguage, translateBuiltin } from '@/shared/builtin';
 import { sameLanguage } from '@/shared/langs';
 import { sendMessage } from '@/shared/messaging';
@@ -269,7 +270,7 @@ export class PageTranslator {
     this.removeOwn(el, 'bilingo-loading');
     const err = document.createElement('font');
     err.className = 'bilingo-error';
-    err.textContent = ' ⚠ 重试';
+    err.textContent = ` ${m.retry()}`;
     err.title = message;
     err.addEventListener('click', (ev) => {
       ev.preventDefault();

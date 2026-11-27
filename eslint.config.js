@@ -3,10 +3,13 @@ import js from '@eslint/js';
 import prettier from 'eslint-config-prettier';
 import svelte from 'eslint-plugin-svelte';
 import globals from 'globals';
+import paraglide from '@inlang/paraglide-js/eslint';
 import ts from 'typescript-eslint';
 
 export default ts.config(
-  { ignores: ['.output/', '.wxt/', 'node_modules/', 'test-results/', 'playwright-report/'] },
+  {
+    ignores: ['.output/', '.wxt/', 'node_modules/', 'test-results/', 'playwright-report/', 'src/paraglide/', 'dist/'],
+  },
   js.configs.recommended,
   ...ts.configs.recommendedTypeChecked,
   ...svelte.configs.recommended,
@@ -25,6 +28,12 @@ export default ts.config(
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', caughtErrors: 'none' }],
       'no-empty': ['error', { allowEmptyCatch: true }],
     },
+  },
+  {
+    // 消息函数必须静态调用（m.foo()），否则无法按需打包
+    files: ['src/**/*.{ts,svelte}'],
+    plugins: { paraglide },
+    rules: { 'paraglide/no-dynamic-message-access': ['error', { messageModuleDirectories: ['paraglide'] }] },
   },
   {
     files: ['**/*.svelte', '**/*.svelte.ts'],

@@ -1,3 +1,5 @@
+import { m } from '@/shared/i18n';
+
 // 可断点续传的 fetch：给 Transformers.js 用（env.fetch）。
 // Transformers.js 只有在整个文件下载完后才写入缓存，1GB 的模型文件一旦中断（关闭浏览器、网络波动、扩展重载）就要从头再来。
 // 这里把大文件按 HTTP Range 分块下载，每块下载完立即存入 Cache Storage；重新开始时跳过已有分块，
@@ -38,10 +40,10 @@ export function createResumableFetch(opts: ResumableOptions = {}): typeof fetch 
   /** 带“卡死检测”的请求：每次 kick() 重新计时，超时则中止连接 */
   const watched = (url: string, init: RequestInit | undefined, range: string) => {
     const ac = new AbortController();
-    let timer = setTimeout(() => ac.abort(new Error(`超过 ${stallMs / 1000} 秒没有收到数据`)), stallMs);
+    let timer = setTimeout(() => ac.abort(new Error(m.err_stall({ s: stallMs / 1000 }))), stallMs);
     const kick = () => {
       clearTimeout(timer);
-      timer = setTimeout(() => ac.abort(new Error(`超过 ${stallMs / 1000} 秒没有收到数据`)), stallMs);
+      timer = setTimeout(() => ac.abort(new Error(m.err_stall({ s: stallMs / 1000 }))), stallMs);
     };
     const signal = init?.signal ? AbortSignal.any([init.signal, ac.signal]) : ac.signal;
     const res = doFetch(url, { ...init, signal, headers: withRange(init?.headers, range) });
@@ -98,7 +100,7 @@ export function createResumableFetch(opts: ResumableOptions = {}): typeof fetch 
                 break;
               }
             }
-            if (got < size) throw new Error('连接提前结束');
+            if (got < size) throw new Error(m.err_conn_closed());
           } finally {
             w.done();
           }
@@ -107,7 +109,7 @@ export function createResumableFetch(opts: ResumableOptions = {}): typeof fetch 
         }
       }
       if (got < size) {
-        throw new Error(`下载模型分块失败（${i + 1}/${count}）：${(lastErr as Error)?.message ?? String(lastErr)}`);
+        throw new Error(m.err_chunk({ i: i + 1, n: count, msg: (lastErr as Error)?.message ?? String(lastErr) }));
       }
       const buf = new Uint8Array(size);
       let off = 0;

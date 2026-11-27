@@ -3,7 +3,8 @@ import { listOpenAIModels } from '@/background/providers/openai';
 import { cacheClear } from '@/background/cache';
 import { translateTexts } from '@/background/translate';
 import { onMessage } from '@/shared/messaging';
-import { getSettings } from '@/shared/settings';
+import { m, setUiLang } from '@/shared/i18n';
+import { getSettings, watchSettings } from '@/shared/settings';
 import { sendToTab } from '@/shared/tabs';
 
 export default defineBackground(() => {
@@ -17,12 +18,24 @@ export default defineBackground(() => {
   onMessage('localUnload', () => closeOffscreen());
   onMessage('llmIdle', () => closeOffscreen());
 
+  // 界面语言（错误信息、右键菜单）跟随设置
+  const ready = getSettings().then((s) => setUiLang(s.uiLang));
+  watchSettings((s) => {
+    if (setUiLang(s.uiLang)) void updateMenuTitles();
+  });
+
   browser.runtime.onInstalled.addListener(() => void setupMenus());
 
   async function setupMenus() {
+    await ready;
     await browser.contextMenus.removeAll();
-    browser.contextMenus.create({ id: 'bilingo-page', title: '翻译此页面 / 显示原文', contexts: ['page'] });
-    browser.contextMenus.create({ id: 'bilingo-selection', title: '翻译“%s”', contexts: ['selection'] });
+    browser.contextMenus.create({ id: 'bilingo-page', title: m.menu_page(), contexts: ['page'] });
+    browser.contextMenus.create({ id: 'bilingo-selection', title: m.menu_selection(), contexts: ['selection'] });
+  }
+
+  async function updateMenuTitles() {
+    await browser.contextMenus.update('bilingo-page', { title: m.menu_page() }).catch(() => {});
+    await browser.contextMenus.update('bilingo-selection', { title: m.menu_selection() }).catch(() => {});
   }
 
   browser.contextMenus.onClicked.addListener((info, tab) => {

@@ -19,6 +19,8 @@ export interface OpenAISettings {
 }
 
 export interface Settings {
+  /** 界面语言：auto 跟随浏览器 */
+  uiLang: 'auto' | 'en' | 'zh-CN';
   provider: ProviderId;
   targetLang: string;
   style: TranslationStyle;
@@ -33,6 +35,7 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
+  uiLang: 'auto',
   provider: 'builtin',
   targetLang: 'zh-CN',
   style: 'faded',
@@ -55,12 +58,8 @@ export const DEFAULT_SETTINGS: Settings = {
   local: { model: 'drnfns/Hy-MT2-1.8B-ONNX', host: 'https://hf-mirror.com/' },
 };
 
+/** 翻译服务的批量参数（展示文字见 src/ui/labels.ts） */
 export interface ProviderMeta {
-  name: string;
-  /** 卡片上的短标签 */
-  tags: string[];
-  /** 一句话说明 */
-  desc: string;
   /** 每批最大字符数 / 段数（openai 以用户设置为准） */
   maxChars: number;
   maxItems: number;
@@ -71,50 +70,32 @@ export interface ProviderMeta {
 
 export const PROVIDERS_META: Record<ProviderId, ProviderMeta> = {
   builtin: {
-    name: '浏览器内置翻译',
-    tags: ['免费', '本机运行'],
-    desc: 'Chrome / Edge 自带的离线翻译模型，文本不出本机',
     maxChars: 4000,
     maxItems: 30,
     concurrency: 4,
     local: true,
   },
   local: {
-    name: '本地大模型 Hy-MT2',
-    tags: ['免费', '离线', '需显卡'],
-    desc: '在你的显卡上运行腾讯开源翻译模型，质量更好',
     maxChars: 2000,
     maxItems: 8,
     concurrency: 1,
   },
   google: {
-    name: '谷歌翻译',
-    tags: ['免费'],
-    desc: '速度快，需要能访问谷歌',
     maxChars: 3000,
     maxItems: 20,
     concurrency: 6,
   },
   azure: {
-    name: 'Azure 翻译',
-    tags: ['每月 200 万字符免费'],
-    desc: '微软云翻译，需要 Azure 密钥',
     maxChars: 5000,
     maxItems: 50,
     concurrency: 4,
   },
   deepl: {
-    name: 'DeepL',
-    tags: ['API Free 额度'],
-    desc: '欧洲语言质量出色，需要 DeepL 密钥',
     maxChars: 5000,
     maxItems: 50,
     concurrency: 3,
   },
   openai: {
-    name: 'AI 大模型',
-    tags: ['OpenAI 兼容'],
-    desc: 'DeepSeek、通义、GLM、Ollama 等任意兼容接口',
     maxChars: 1200,
     maxItems: 6,
     concurrency: 3,

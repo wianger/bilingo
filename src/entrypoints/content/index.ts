@@ -1,3 +1,4 @@
+import { m, setUiLang } from '@/shared/i18n';
 import { PageTranslator, translateBatch } from '@/content/page-translator';
 import { PageUI } from '@/content/page-ui';
 import { onMessage } from '@/shared/messaging';
@@ -28,12 +29,12 @@ export default defineContentScript({
       const text = sel?.toString().trim();
       if (!sel || !text || !sel.rangeCount) return;
       const rect = sel.getRangeAt(0).getBoundingClientRect();
-      ui.showBubble(rect, '翻译中…', 'loading');
+      ui.showBubble(rect, m.translating(), 'loading');
       try {
         const [result] = await translateBatch([text], settings);
         ui.showBubble(rect, result || text);
       } catch (e) {
-        ui.showBubble(rect, `翻译失败：${(e as Error).message}`, 'error');
+        ui.showBubble(rect, m.translate_failed({ msg: (e as Error).message }), 'error');
       }
     }
 
@@ -64,6 +65,7 @@ export default defineContentScript({
     watchSettings((next) => {
       const prev = settings;
       settings = next;
+      if (setUiLang(next.uiLang)) ui.applyLabels();
       if (prev.style !== next.style) translator.restyle(next.style);
       if (prev.scope !== next.scope && translator.active) {
         translator.restore();
@@ -73,6 +75,7 @@ export default defineContentScript({
     });
 
     settings = await getSettings();
+    if (setUiLang(settings.uiLang)) ui.applyLabels();
     ui.setBall(settings.floatBall, translator.active);
     if (settings.autoSites.includes(location.hostname)) translator.start();
   },

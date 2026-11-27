@@ -1,3 +1,4 @@
+import { m, setUiLang } from '@/shared/i18n';
 import {
   DEFAULT_SETTINGS,
   getSettings,
@@ -46,8 +47,9 @@ function cacheScope(s: Settings): string[] {
 
 export async function translateTexts(texts: string[], override?: SettingsPatch): Promise<string[]> {
   const s = override ? mergeSettings(DEFAULT_SETTINGS, override) : await getSettings();
+  setUiLang(s.uiLang); // service worker 冷启动时，错误信息也用正确的界面语言
   const provider = PROVIDERS[s.provider];
-  if (!provider) throw new TranslateError(`翻译服务 ${s.provider} 不在后台运行`);
+  if (!provider) throw new TranslateError(m.err_not_background({ id: s.provider }));
 
   const useCache = !override; // 设置页"测试"不读写缓存
   const keys = useCache ? await Promise.all(texts.map((t) => hashKey([...cacheScope(s), t]))) : [];

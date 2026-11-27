@@ -89,7 +89,7 @@ describe('resumable model download', () => {
     const first = makeServer({ failFrom: 600 });
     const { store, openCache } = memoryCache();
     const f1 = createResumableFetch({ fetch: first.fetchFn, openCache, chunkSize: 300, retries: 0 });
-    await expect(read(await f1(URL_))).rejects.toThrow(/分块失败/);
+    await expect(read(await f1(URL_))).rejects.toThrow(/Failed to download model chunk/);
     expect(store.size).toBe(2); // 0-299、300-599 已保存
 
     const second = makeServer();

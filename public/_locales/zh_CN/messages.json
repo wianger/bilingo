@@ -1,0 +1,7 @@
+{
+  "extName": { "message": "Bilingo 双语网页翻译" },
+  "extDescription": {
+    "message": "双语对照网页翻译：原文下方显示译文。支持浏览器内置 AI、本地大模型、谷歌、Azure、DeepL 和任意 OpenAI 兼容的大模型接口。"
+  },
+  "cmdToggle": { "message": "翻译当前页面 / 显示原文" }
+}
