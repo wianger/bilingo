@@ -2,6 +2,7 @@
 import { detectLanguage, translateBuiltin } from '@/shared/builtin';
 import { sameLanguage } from '@/shared/langs';
 import { sendMessage } from '@/shared/messaging';
+import { detectMainContent, type MainContent } from './main-content';
 import { batchLimits, type Settings } from '@/shared/settings';
 import {
   collectSegments,
@@ -65,6 +66,8 @@ export class PageTranslator {
   private pendingRoots = new Set<Element>();
   private mutationTimer = 0;
   private hints = new WeakMap<Element, string>();
+  /** 识别出的正文区域；null 表示不是文章类网页，按全页规则翻译 */
+  private main: MainContent | null = null;
 
   constructor(private getSettings: () => Settings) {}
 
@@ -77,7 +80,7 @@ export class PageTranslator {
     this.active = true;
     this.generation++;
     this.io = new IntersectionObserver((entries) => this.onIntersect(entries), { rootMargin: '600px 0px' });
-    this.scan(document.body);
+    this.scanPage();
     this.mo = new MutationObserver((m) => this.onMutations(m));
     this.mo.observe(document.body, { childList: true, subtree: true });
     this.onChange?.(true);
@@ -90,6 +93,7 @@ export class PageTranslator {
     this.mo?.disconnect();
     this.queue.clear();
     this.pendingRoots.clear();
+    this.main = null;
     document.querySelectorAll('.bilingo-tr, .bilingo-loading, .bilingo-error').forEach((n) => n.remove());
     for (const el of this.touched) el.removeAttribute(STATE_ATTR);
     this.touched.clear();
@@ -117,6 +121,20 @@ export class PageTranslator {
 
   private state(el: Element) {
     return el.getAttribute(STATE_ATTR) as State | null;
+  }
+
+  /** 智能模式下先识别正文区域：是文章页就只翻译正文和标题，否则翻译全页 */
+  private scanPage() {
+    this.main = this.settings.scope !== 'all' ? detectMainContent() : null;
+    if (!this.main) {
+      this.scan(document.body);
+      return;
+    }
+    for (const r of [...this.main.headings, ...this.main.roots]) this.scan(r);
+  }
+
+  private inScope(el: Element): boolean {
+    return !this.main || [...this.main.roots, ...this.main.headings].some((r) => r.contains(el));
   }
 
   private scan(root: Element) {
@@ -281,8 +299,13 @@ export class PageTranslator {
   private processMutations() {
     const roots = [...this.pendingRoots];
     this.pendingRoots.clear();
+    // 单页应用换了页面、原来的正文区域已不在：重新识别
+    if (this.main && this.main.roots.every((r) => !r.isConnected)) {
+      this.scanPage();
+      return;
+    }
     for (const r of roots) {
-      if (!r.isConnected || r.closest(`[${STATE_ATTR}]`) || r.closest(SKIP_CONTEXT)) continue;
+      if (!r.isConnected || r.closest(`[${STATE_ATTR}]`) || r.closest(SKIP_CONTEXT) || !this.inScope(r)) continue;
       this.scan(r);
     }
   }

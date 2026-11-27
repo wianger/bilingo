@@ -1,5 +1,7 @@
 // 端到端测试：在真实 Chromium 里加载构建产物，用本地模拟的 OpenAI 兼容接口验证整条翻译链路
-declare const chrome: { storage: { local: { set(v: unknown): Promise<void> } } };
+declare const chrome: {
+  storage: { local: { set(v: unknown): Promise<void>; get(k: string): Promise<Record<string, unknown>> } };
+};
 import { test as base, chromium, expect, type BrowserContext, type Worker } from '@playwright/test';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -31,6 +33,25 @@ const LAYOUT_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8">
   <button id="btn">Load more comments</button>
 </body></html>`;
 
+const LONG =
+  'WebGPU is a modern graphics and compute API for the web that exposes the capabilities of current GPU hardware, ' +
+  'designed as the successor to WebGL with a much closer mapping to Vulkan, Metal and Direct3D 12.';
+const ARTICLE_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>article</title>
+<style>.layout { display: flex; gap: 24px; } main { flex: 1; } aside { width: 240px; }</style></head><body>
+  <header><a href="/">My Blog</a><nav><a href="/a">Archive</a> <a href="/b">About</a></nav></header>
+  <h1 id="title">A long article title about WebGPU</h1>
+  <div class="layout">
+    <main><article id="post">
+      ${[1, 2, 3, 4, 5].map((i) => `<p id="p${i}">${LONG} Paragraph number ${i} continues the story.</p>`).join('')}
+    </article></main>
+    <aside id="side">
+      <h3 id="related">Related posts</h3>
+      <ul><li><a href="/x">Another interesting post</a></li><li><a href="/y">Yet another post</a></li></ul>
+      <p id="promo">Subscribe to the newsletter to get every new post delivered straight to your inbox.</p>
+    </aside>
+  </div>
+</body></html>`;
+
 let server: Server;
 let origin = '';
 const llmRequests: { segments?: { id: number; text: string }[]; text?: string }[] = [];
@@ -57,6 +78,10 @@ const test = base.extend<{ context: BrowserContext; sw: Worker }>({
 
 test.beforeAll(async () => {
   server = createServer((req, res) => {
+    if (req.url === '/article') {
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      return res.end(ARTICLE_PAGE);
+    }
     if (req.url === '/layout') {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       return res.end(LAYOUT_PAGE);
@@ -231,4 +256,27 @@ test('translates only real content and never breaks fixed-size layouts', async (
   await expect(bubble.locator('.body')).toContainText('【译】A fairly long card title');
   await page.locator('#para').hover();
   await expect(bubble).toBeHidden();
+});
+
+test('on article pages only the main content and the headline are translated', async ({ context, sw }) => {
+  await sw.evaluate(async (baseUrl) => {
+    await chrome.storage.local.set({
+      settings: { provider: 'openai', targetLang: 'zh-CN', openai: { baseUrl, apiKey: 'test', model: 'mock' } },
+    });
+  }, `${origin}/v1`);
+  const page = await context.newPage();
+  await page.goto(`${origin}/article`);
+  await page.locator('#bilingo-host').locator('.ball').click();
+  await expect(page.locator('#p1 .bilingo-tr')).toContainText('【译】WebGPU is a modern');
+  await expect(page.locator('#title .bilingo-tr')).toHaveText('【译】A long article title about WebGPU');
+  // 侧边栏（相关文章、订阅推广）不在正文区域内
+  await page.waitForTimeout(500);
+  await expect(page.locator('#side [data-bilingo]')).toHaveCount(0);
+
+  // 关闭"只翻译正文"后，侧边栏也会翻译
+  await sw.evaluate(async () => {
+    const { settings } = (await chrome.storage.local.get('settings')) as { settings: Record<string, unknown> };
+    await chrome.storage.local.set({ settings: { ...settings, scope: 'all' } });
+  });
+  await expect(page.locator('#promo .bilingo-tr')).toBeVisible();
 });
