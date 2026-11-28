@@ -186,5 +186,12 @@
   "rules_imported": "Imported {n} rules",
   "rules_import_failed": "Import failed: {msg}",
   "rules_invalid": "Invalid CSS selector: {sel}",
-  "rules_new_site": "New rule"
+  "rules_new_site": "New rule",
+  "yt_button_on": "Bilingual subtitles: on (Bilingo)",
+  "yt_button_off": "Bilingual subtitles: off (Bilingo)",
+  "yt_loading": "Loading subtitles…",
+  "yt_no_captions": "This video has no captions to translate",
+  "yt_load_failed": "Couldn't load subtitles: {msg}",
+  "opt_yt": "YouTube bilingual subtitles",
+  "opt_yt_desc": "Show the translation under the original subtitles. Turn it on or off with the Bilingo button in the player's control bar; uses the caption track selected in YouTube's CC menu."
 }

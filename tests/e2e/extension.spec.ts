@@ -8,6 +8,10 @@ declare const chrome: {
 };
 import { test as base, chromium, expect, type BrowserContext, type Worker } from '@playwright/test';
 import { createServer, type Server } from 'node:http';
+import { createServer as createHttpsServer } from 'node:https';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import type { AddressInfo } from 'node:net';
 import path from 'node:path';
 
@@ -379,4 +383,114 @@ test('picking an area on the page creates a site rule', async ({ context, sw }) 
   ]);
   await expect(page.locator('#p1 .bilingo-tr')).toBeVisible();
   await expect(page.locator('#side .bilingo-tr')).toHaveCount(0);
+});
+
+// ---------- YouTube 双语字幕：本地模拟的 YouTube（HTTPS + 带令牌的字幕接口） ----------
+
+const YT_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>yt</title>
+<style>#movie_player { position: relative; width: 800px; height: 450px; background: #000; }
+video { width: 100%; height: 100%; }</style></head><body>
+<div id="movie_player" class="html5-video-player ytp-autohide">
+  <video></video>
+  <div class="ytp-caption-window-container" id="native">native captions</div>
+  <div class="ytp-right-controls"><button class="ytp-settings-button">⚙</button></div>
+</div>
+<script>
+  // 模拟 YouTube 播放器：打开字幕时请求字幕接口（带令牌）
+  const player = document.getElementById('movie_player');
+  let track = {};
+  player.getOption = () => track;
+  player.loadModule = () => {};
+  player.toggleSubtitles = () => {
+    track = { languageCode: 'en' };
+    const xhr = new XMLHttpRequest();
+    xhr.open('GET', '/api/timedtext?v=vid123&lang=en&pot=TOKEN&c=WEB&fmt=srv3');
+    xhr.send();
+  };
+</script></body></html>`;
+
+const YT_JSON3 = {
+  events: [
+    { tStartMs: 0, dDurationMs: 2500, segs: [{ utf8: 'Welcome to the show.' }] },
+    { tStartMs: 3000, dDurationMs: 2000, segs: [{ utf8: 'Today we talk' }] },
+    { tStartMs: 5000, dDurationMs: 2000, segs: [{ utf8: 'about WebGPU.' }] },
+  ],
+};
+
+test('YouTube: bilingual subtitles from the player caption request', async ({ sw }) => {
+  // 自签名证书，让 www.youtube.com 指向本地 HTTPS 服务器
+  const dir = mkdtempSync(path.join(tmpdir(), 'bilingo-yt-'));
+  execFileSync(
+    'openssl',
+    [
+      'req',
+      '-x509',
+      '-newkey',
+      'rsa:2048',
+      '-nodes',
+      '-days',
+      '1',
+      '-subj',
+      '/CN=www.youtube.com',
+      '-keyout',
+      path.join(dir, 'key.pem'),
+      '-out',
+      path.join(dir, 'cert.pem'),
+    ],
+    { stdio: 'ignore' },
+  );
+  const yt = createHttpsServer(
+    { key: readFileSync(path.join(dir, 'key.pem')), cert: readFileSync(path.join(dir, 'cert.pem')) },
+    (req, res) => {
+      const url = new URL(req.url!, 'https://www.youtube.com');
+      if (url.pathname === '/watch') return res.writeHead(200, { 'content-type': 'text/html' }).end(YT_PAGE);
+      if (url.pathname === '/api/timedtext') {
+        // 与真实 YouTube 一致：没有令牌只返回空内容
+        if (url.searchParams.get('pot') !== 'TOKEN') return res.writeHead(200).end('');
+        return res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(YT_JSON3));
+      }
+      res.writeHead(404).end();
+    },
+  );
+  await new Promise<void>((r) => yt.listen(0, '127.0.0.1', r));
+  const ytPort = (yt.address() as AddressInfo).port;
+
+  const context = await chromium.launchPersistentContext('', {
+    channel: 'chromium',
+    ignoreHTTPSErrors: true,
+    args: [
+      `--disable-extensions-except=${EXT}`,
+      `--load-extension=${EXT}`,
+      `--host-resolver-rules=MAP www.youtube.com 127.0.0.1`,
+      '--ignore-certificate-errors',
+      '--no-proxy-server',
+    ],
+  });
+  try {
+    const worker = context.serviceWorkers()[0] ?? (await context.waitForEvent('serviceworker'));
+    await useMockEngine(worker, { ytSubtitles: true });
+    void sw; // 默认 fixture 不使用
+    const page = await context.newPage();
+    await page.goto(`https://www.youtube.com:${ytPort}/watch?v=vid123`);
+
+    const subs = page.locator('#bilingo-yt-subs');
+    await expect(subs.locator('.src')).toHaveText('Welcome to the show.');
+    await expect(subs.locator('.tr')).toHaveText('【译】Welcome to the show.');
+    // 原生字幕被隐藏，控制栏里有开关按钮
+    await expect(page.locator('#native')).toBeHidden();
+    await expect(page.locator('.bilingo-yt-btn')).toHaveAttribute('aria-pressed', 'true');
+
+    // 跟随播放进度：两行原字幕被拼成一句
+    await page.evaluate(() => (document.querySelector('video')!.currentTime = 4));
+    await expect(subs.locator('.src')).toHaveText('Today we talk about WebGPU.');
+    await expect(subs.locator('.tr')).toHaveText('【译】Today we talk about WebGPU.');
+
+    // 关闭：叠加层移除，原生字幕恢复
+    await page.locator('.bilingo-yt-btn').click();
+    await expect(subs).toHaveCount(0);
+    await expect(page.locator('#native')).toBeVisible();
+  } finally {
+    await context.close();
+    yt.close();
+  }
 });

@@ -62,6 +62,7 @@ Decisions that are easy to get wrong:
 - **Gemma models** must use `q4`, not `q4f16`: fp16 on WebGPU produces garbage output (onnxruntime#26732).
 - **Chromium injects `body { font-size: 75% }`** into extension pages; `src/assets/ui.css` resets it.
 - **Microsoft Edge's free translate endpoint** (`edge.microsoft.com/translate/auth`) stopped working around August 2026; don't add it back.
+- **YouTube captions** require a proof-of-origin token (`pot`) since 2025; fetching `/api/timedtext` without it returns an empty 200. `youtube-main.content.ts` runs in the page's main world at `document_start`, captures the player's own request and hands the URL to the isolated content script. Headless browsers don't get a valid token, so real-site checks need a headed browser; CI uses a local fake YouTube.
 - **Assets**: `assets/logo.svg` is the single source for the logo. Run `npm run icons` after editing it, and `npm run build && npm run screenshots` to refresh README images.
 
 ## License

@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- YouTube bilingual subtitles: a Bilingo button in the player's control bar shows the translation under the original subtitles, including auto-generated captions and fullscreen. Captions are obtained by intercepting the player's own caption request (YouTube requires a proof-of-origin token that extensions can't generate), joined into sentences, and translated about a minute ahead of playback. Verified on real YouTube videos with manual and auto-generated captions.
 - Site rules: per-site "translate only" / "don't translate" areas and custom CSS. Create them by clicking an area of the page (popup → Choose what to translate…, or the context menu); the generated selectors avoid hashed class names and `nth-child`, so they keep working on other pages of the same site. Edit, import and export rules in settings. Built-in rules are supported but none ship yet: the candidate YouTube rule turned out unnecessary on today's YouTube.
 - English interface. The UI follows the browser language by default and can be switched in Settings → Interface language, taking effect immediately in the popup, settings page, in-page button and context menus. Built with Paraglide JS (compile-time, type-safe messages); the extension name and description are localized through `_locales`.
 

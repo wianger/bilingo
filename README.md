@@ -33,6 +33,7 @@ Bilingual page translators are great for reading foreign-language content, but t
 - **Bilingual or original in one click.** Translations are inserted under each paragraph. Click the floating button, press <kbd>Alt</kbd>+<kbd>A</kbd>, or use the toolbar popup to switch back.
 - **Translates what matters.** On articles (news, blogs, docs), the main content is detected with [Mozilla Readability](https://github.com/mozilla/readability), the engine behind Firefox Reader View. On other pages, navigation, menus, buttons, tag pills, link lists, code identifiers and screen-reader-only text are skipped.
 - **Site rules you can point and click.** If a site translates the wrong things, open the popup, choose **Choose what to translate…**, click the area, and pick **Don't translate** or **Translate only this**. Rules are generated to match the same kind of area on every page of that site, and can be edited, imported and exported in settings.
+- **YouTube bilingual subtitles.** Click the Bilingo button in the player's control bar to show the translation under the original subtitles, sentence by sentence, including auto-generated captions and fullscreen. It follows the caption track you pick in YouTube's CC menu and translates ahead as the video plays.
 - **Never breaks layouts.** Before and after inserting a translation, Bilingo measures the surrounding containers. If a translation would overflow a fixed-size card or tab strip, it is withdrawn and shown on hover instead.
 - **Lazy and cheap.** Only paragraphs near the viewport are translated, dynamic content is followed automatically, text that is already in your language is skipped, and every result is cached in IndexedDB.
 - **Six engines**, from free and offline to the LLM of your choice (see below).
@@ -95,10 +96,13 @@ The Safari build uses a non-persistent background page instead of a service work
 | Translation that didn't fit     | Text with a dotted underline: hover to see its translation                                                         |
 | Always translate a site         | Popup → **Always translate this site**                                                                             |
 | Fix what a site translates      | Popup → **Choose what to translate…** → click an area (or right-click → **Choose what to translate on this site**) |
+| YouTube bilingual subtitles     | Click the Bilingo button in the video player's control bar                                                         |
 | Move the floating button        | Drag it; it snaps to the nearest edge and remembers its position                                                   |
 | Change engine, style, shortcuts | Popup → ⚙ settings                                                                                                 |
 
 > The interface is available in English and Simplified Chinese. It follows your browser language by default; change it in Settings → Interface language. Pages can be translated into 15 target languages. Want Bilingo in your language? See [CONTRIBUTING.md](CONTRIBUTING.md#translating-the-interface).
+
+> **Note:** other extensions that also hook YouTube's caption requests (for example other bilingual-subtitle tools) can conflict with Bilingo's YouTube subtitles. If subtitles don't appear, try disabling them.
 
 ## Privacy
 
@@ -173,7 +177,9 @@ The UI uses modern native CSS (OKLCH colors, `light-dark()`, customizable `<sele
 - [ ] Publish to the Chrome Web Store and Edge Add-ons
 - [ ] Local LLM on Safari (Safari 26 supports WebGPU)
 - [x] Per-site rules (point-and-click, include / exclude / CSS)
-- [ ] PDF and video subtitle translation
+- [x] YouTube bilingual subtitles
+- [ ] Subtitles on other video sites
+- [ ] PDF translation
 
 ## Contributing
 

@@ -186,5 +186,12 @@
   "rules_imported": "已导入 {n} 条规则",
   "rules_import_failed": "导入失败：{msg}",
   "rules_invalid": "CSS 选择器无效：{sel}",
-  "rules_new_site": "新规则"
+  "rules_new_site": "新规则",
+  "yt_button_on": "双语字幕：已开启（Bilingo）",
+  "yt_button_off": "双语字幕：已关闭（Bilingo）",
+  "yt_loading": "正在加载字幕…",
+  "yt_no_captions": "这个视频没有可翻译的字幕",
+  "yt_load_failed": "字幕加载失败：{msg}",
+  "opt_yt": "YouTube 双语字幕",
+  "opt_yt_desc": "在原字幕下方显示译文。可用播放器控制栏里的 Bilingo 按钮开关；使用 YouTube 字幕菜单里选中的字幕轨道。"
 }

@@ -433,6 +433,14 @@
             </div>
             <input type="checkbox" class="switch" bind:checked={s.floatBall} />
           </label>
+
+          <label class="row">
+            <div>
+              <div>{m.opt_yt()}</div>
+              <div class="muted">{m.opt_yt_desc()}</div>
+            </div>
+            <input type="checkbox" class="switch" bind:checked={s.ytSubtitles} />
+          </label>
         </section>
 
         <section id="provider" class="card">

@@ -27,6 +27,8 @@ export interface Settings {
   style: TranslationStyle;
   scope: TranslateScope;
   floatBall: boolean;
+  /** YouTube 双语字幕 */
+  ytSubtitles: boolean;
   autoSites: string[];
   openai: OpenAISettings;
   azure: { key: string; region: string };
@@ -46,6 +48,7 @@ export const DEFAULT_SETTINGS: Settings = {
   style: 'faded',
   scope: 'smart',
   floatBall: true,
+  ytSubtitles: false,
   autoSites: [],
   siteRules: [],
   disabledBuiltinRules: [],

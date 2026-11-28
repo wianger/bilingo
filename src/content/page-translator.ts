@@ -1,8 +1,8 @@
 // 页面翻译调度：段落进入视口 → 语言检测 → 分批翻译 → 插入译文；同时监听动态内容
+import { translateBatch } from '@/shared/translate-client';
 import { m } from '@/shared/i18n';
-import { detectLanguage, translateBuiltin } from '@/shared/builtin';
+import { detectLanguage } from '@/shared/builtin';
 import { sameLanguage } from '@/shared/langs';
-import { sendMessage } from '@/shared/messaging';
 import { detectMainContent, type MainContent } from './main-content';
 import { resolveRules, type ResolvedRules } from '@/shared/site-rules';
 import { batchLimits, type Settings } from '@/shared/settings';
@@ -47,12 +47,7 @@ function causedOverflow(before: Overflow[]): boolean {
   });
 }
 
-export async function translateBatch(texts: string[], s: Settings): Promise<string[]> {
-  if (s.provider === 'builtin') {
-    return translateBuiltin(texts, s.targetLang, document.documentElement.lang || 'en');
-  }
-  return sendMessage('translate', { texts });
-}
+export { translateBatch };
 
 export class PageTranslator {
   active = false;
