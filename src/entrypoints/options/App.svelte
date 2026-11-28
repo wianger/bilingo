@@ -444,6 +444,14 @@
 
           <label class="row">
             <div>
+              <div>{m.opt_vs()}</div>
+              <div class="muted">{m.opt_vs_desc()}</div>
+            </div>
+            <input type="checkbox" class="switch" bind:checked={s.videoSubtitles} />
+          </label>
+
+          <label class="row">
+            <div>
               <div>{m.opt_pdf()}</div>
               <div class="muted">
                 {m.opt_pdf_desc()}
@@ -451,6 +459,14 @@
               </div>
             </div>
             <input type="checkbox" class="switch" bind:checked={s.pdf.autoOpen} />
+          </label>
+
+          <label class="row">
+            <div>
+              <div>{m.opt_pdf_ai()}</div>
+              <div class="muted">{m.opt_pdf_ai_desc()}</div>
+            </div>
+            <input type="checkbox" class="switch" bind:checked={s.pdf.aiLayout} />
           </label>
         </section>
 

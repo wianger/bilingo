@@ -20,7 +20,7 @@ export async function request(url: string, init: RequestInit, label: string): Pr
   if (!res.ok) {
     let detail = '';
     try {
-      detail = (await res.text()).slice(0, 300);
+      detail = errorDetail(await res.text());
     } catch {}
     throw new TranslateError(
       `${label} HTTP ${res.status} ${detail}`.trim(),
@@ -29,6 +29,16 @@ export async function request(url: string, init: RequestInit, label: string): Pr
     );
   }
   return res;
+}
+
+/** 错误响应的正文：JSON 原样（截断），HTML 错误页只取标题（例如 429 限流页），不把整页 HTML 显示给用户 */
+export function errorDetail(body: string): string {
+  const text = body.trim();
+  if (/^<!doctype html|^<html/i.test(text)) {
+    const title = /<title[^>]*>([^<]*)<\/title>/i.exec(text)?.[1]?.trim();
+    return title ?? '';
+  }
+  return text.replace(/\s+/g, ' ').slice(0, 300);
 }
 
 export async function withRetry<T>(fn: () => Promise<T>, tries = 3, baseDelay = 1000): Promise<T> {

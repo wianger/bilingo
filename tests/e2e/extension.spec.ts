@@ -101,6 +101,23 @@ const PDF_PARAGRAPHS = [
   ['Each paragraph is replaced with its translation in the same place.'],
 ];
 
+const VIDEO_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>video</title></head><body>
+  <video id="v" style="width:640px;height:360px;background:#000" controls>
+    <track kind="subtitles" srclang="en" label="English" src="/subs.vtt" default>
+  </video>
+</body></html>`;
+const VTT = `WEBVTT
+
+00:00.000 --> 00:02.000
+<v Instructor>Hello and welcome
+
+00:02.000 --> 00:04.000
+to the <i>course</i>.
+
+00:04.000 --> 00:06.000
+Let's begin.
+`;
+
 let server: Server;
 let origin = '';
 const llmRequests: { segments?: { id: number; text: string }[]; text?: string }[] = [];
@@ -138,6 +155,14 @@ test.beforeAll(async () => {
     if (req.url === '/page') {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       return res.end(PAGE);
+    }
+    if (req.url === '/video') {
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      return res.end(VIDEO_PAGE);
+    }
+    if (req.url === '/subs.vtt') {
+      res.writeHead(200, { 'content-type': 'text/vtt' });
+      return res.end(VTT);
     }
     if (req.url === '/paper.pdf') {
       res.writeHead(200, { 'content-type': 'application/pdf' });
@@ -508,6 +533,82 @@ test('PDF: online PDFs open in the Bilingo reader with the translation next to e
   await expect(page.locator('.bl-pane').first()).toBeHidden();
   await page.getByRole('radio', { name: 'Side by side' }).click();
   await expect(page.locator('.bl-pane').first()).toBeVisible();
+
+  // 导出译文 PDF：拦截打印，保留打印版式（画布换成图片），再用 Chromium 生成真正的 PDF 检查文字
+  await page.evaluate(() => {
+    window.print = () => {
+      const root = document.getElementById('bl-print')!;
+      const copy = root.cloneNode(true) as HTMLElement;
+      const canvases = root.querySelectorAll('canvas');
+      copy.querySelectorAll('canvas').forEach((c, i) => {
+        const img = document.createElement('img');
+        img.src = canvases[i]!.toDataURL();
+        img.style.cssText = 'display:block;width:100%;height:100%';
+        c.replaceWith(img);
+      });
+      copy.dataset.printed = 'translation';
+      document.body.append(copy);
+    };
+  });
+  await page.getByRole('button', { name: 'Download' }).click();
+  await page.getByRole('button', { name: /Translated PDF/ }).click();
+  const printed = page.locator('[data-printed]');
+  await expect(printed).toHaveCount(1);
+  await expect(printed.locator('.bl-sheet')).toHaveCount(1);
+  await expect(printed.locator('.bl-block')).toHaveText([
+    fakeTranslate(PDF_PARAGRAPHS[0]!.join(' ')),
+    fakeTranslate(PDF_PARAGRAPHS[1]![0]!),
+  ]);
+  await page.evaluate(() => document.body.classList.add('bl-printing'));
+  const pdf = await page.pdf({ preferCSSPageSize: true, printBackground: true });
+  const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const out = await getDocument({ data: new Uint8Array(pdf) }).promise;
+  expect(out.numPages).toBe(1);
+  const outPage = await out.getPage(1);
+  expect(outPage.getViewport({ scale: 1 }).width).toBeCloseTo(612, 0);
+  const text = (await outPage.getTextContent()).items.map((i) => ('str' in i ? i.str : '')).join('');
+  expect(text).toContain('【译】');
+});
+
+test('other video sites: bilingual subtitles from HTML5 subtitle tracks', async ({ context, sw }) => {
+  await sw.evaluate(async (baseUrl) => {
+    await chrome.storage.local.set({
+      settings: {
+        uiLang: 'en',
+        provider: 'openai',
+        targetLang: 'zh-CN',
+        videoSubtitles: true,
+        openai: { baseUrl, apiKey: 'test', model: 'mock' },
+      },
+    });
+  }, `${origin}/v1`);
+  const page = await context.newPage();
+  await page.goto(`${origin}/video`);
+  const overlay = page.locator('#bilingo-video-subs');
+  // 字幕片段拼成完整的句子，去掉 WebVTT 标签，并显示译文
+  await expect(overlay.locator('.src')).toHaveText('Hello and welcome to the course.');
+  // 字幕叠加在视频画面的下部
+  await expect(overlay.locator('.src')).toBeVisible();
+  const videoBox = (await page.locator('#v').boundingBox())!;
+  const lineBox = (await overlay.locator('.src').boundingBox())!;
+  expect(lineBox.y).toBeGreaterThan(videoBox.y + videoBox.height / 2);
+  expect(lineBox.y + lineBox.height).toBeLessThan(videoBox.y + videoBox.height);
+  await expect(overlay.locator('.tr')).toHaveText(fakeTranslate('Hello and welcome to the course.'));
+  // 浏览器自己的字幕显示被关掉（轨道改为 hidden），关闭后还原
+  const mode = () => page.evaluate(() => (document.getElementById('v') as HTMLVideoElement).textTracks[0]!.mode);
+  expect(await mode()).toBe('hidden');
+
+  // 视频上的 Bilingo 按钮：关闭双语字幕
+  const button = overlay.locator('.bl-btn');
+  await expect(button).toHaveAttribute('aria-pressed', 'true');
+  await page.mouse.move(300, 150);
+  await button.click();
+  await expect(button).toHaveAttribute('aria-pressed', 'false');
+  await expect(overlay.locator('.src')).toBeHidden();
+  await expect.poll(mode).toBe('showing');
+  expect(await sw.evaluate(async () => (await chrome.storage.local.get('settings')).settings)).toMatchObject({
+    videoSubtitles: false,
+  });
 });
 
 test('YouTube: bilingual subtitles from the player caption request', async ({ sw }) => {

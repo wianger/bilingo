@@ -1,0 +1,75 @@
+name: Safari / WebKit
+
+# 在 GitHub 的 macOS 机器上验证 Safari 相关的部分（维护者没有 Mac）：
+# - Safari 扩展能否被 Xcode 转换、编译
+# - 真实 Safari 的 WebGPU：GitHub 的 macOS 是虚拟机，Safari 目前拿不到 GPU 适配器，这一步只记录结果
+# - 本地大模型的实际运行路径（隐藏 iframe → Worker → Transformers.js → WebGPU）：
+#   在 Playwright 的 WebKit 里跑（同一 WebKit WebGPU 实现，在虚拟机里能拿到适配器），真实下载模型并翻译
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: Hugging Face model id for the local LLM test
+        default: drnfns/Hy-MT2-1.8B-ONNX
+  schedule:
+    - cron: '0 3 * * 1'
+  push:
+    branches: [main]
+    paths:
+      - src/local-llm/**
+      - src/background/providers/local.ts
+      - src/entrypoints/offscreen/**
+      - tests/webkit/**
+      - .github/workflows/safari.yml
+
+permissions:
+  contents: read
+
+jobs:
+  webkit:
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run postinstall
+      - name: Environment
+        run: |
+          sw_vers
+          system_profiler SPDisplaysDataType | head -20
+          /usr/bin/defaults read /Applications/Safari.app/Contents/Info CFBundleShortVersionString
+
+      - name: Build the Safari extension
+        run: npm run build:safari
+      - name: Convert and compile with Xcode
+        run: |
+          xcrun safari-web-extension-converter .output/safari-mv3 \
+            --project-location build/xcode --app-name Bilingo --bundle-identifier io.github.bilingo \
+            --macos-only --no-open --no-prompt --force
+          xcodebuild -project build/xcode/Bilingo/Bilingo.xcodeproj -scheme Bilingo \
+            -configuration Debug CODE_SIGNING_ALLOWED=NO build | tail -5
+
+      - name: Build the WebKit test page
+        run: npx vite build --config tests/webkit/vite.config.ts
+      - name: Serve the test page
+        run: |
+          npx vite preview --config tests/webkit/vite.config.ts --host 127.0.0.1 --port 4173 --strictPort &
+          for i in $(seq 60); do curl -sf http://127.0.0.1:4173/ >/dev/null && break; sleep 1; done
+
+      - name: Real Safari — WebGPU probe
+        continue-on-error: true
+        run: |
+          sudo safaridriver --enable
+          safaridriver -p 4444 &
+          sleep 3
+          node tests/webkit/run.mjs safari http://127.0.0.1:4173/
+
+      - run: npx playwright install webkit
+      - name: Playwright WebKit — local LLM on WebGPU
+        env:
+          MODEL: ${{ inputs.model || 'drnfns/Hy-MT2-1.8B-ONNX' }}
+        run: node tests/webkit/run.mjs webkit http://127.0.0.1:4173/

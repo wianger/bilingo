@@ -12,6 +12,8 @@ import { sameLanguage } from '@/shared/langs';
 import { batchLimits, type PdfMode, type Settings } from '@/shared/settings';
 import { translateBatch } from '@/shared/translate-client';
 import { extractBlocks, type Block, type TextItemLike } from './layout';
+import { LayoutDetector } from './layout-client';
+import type { Region } from './layout-model';
 
 GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -21,6 +23,8 @@ const GAP = 16;
 const MIN_FIT = 0.6;
 /** 提前翻译的页数 */
 const AHEAD = 2;
+/** 导出时页面画面的分辨率（与 pdf.js 打印相同：150 DPI） */
+const PRINT_SCALE = 150 / 72;
 
 type PageState = 'idle' | 'loading' | 'done' | 'error';
 
@@ -36,7 +40,15 @@ interface PageData {
   width: number;
 }
 
+/** AI 版面分析的状态 */
+export type LayoutStatus =
+  | { state: 'off' }
+  | { state: 'downloading'; progress: number }
+  | { state: 'ready'; backend: string }
+  | { state: 'error'; message: string };
+
 export interface ViewerStatus {
+  layout: LayoutStatus;
   pages: number;
   page: number;
   scale: number;
@@ -58,12 +70,16 @@ export class BilingualPdfViewer {
   private doc: PDFDocumentProxy | null = null;
   private task: PDFDocumentLoadingTask | null = null;
   private pages = new Map<number, PageData>();
+  /** 正在进行的翻译任务（导出时等待） */
+  private jobs = new Map<number, Promise<void>>();
   private panes = new Map<number, HTMLElement>();
   private visible = new Set<number>();
   private observer: IntersectionObserver;
   private generation = 0;
   private zoom: ZoomValue = 'auto';
   private _mode: PdfMode;
+  private detector: LayoutDetector | null = null;
+  private layoutStatus: LayoutStatus = { state: 'off' };
   onStatus?: (s: ViewerStatus) => void;
 
   constructor(
@@ -184,9 +200,10 @@ export class BilingualPdfViewer {
     if (this.doc) this.viewer.currentPageNumber = Math.min(this.doc.numPages, Math.max(1, page));
   }
 
-  /** 翻译设置（服务、目标语言）变了：丢弃已有译文重新翻译 */
+  /** 翻译设置（服务、目标语言、版面分析）变了：丢弃已有译文重新翻译 */
   retranslate() {
     this.generation++;
+    if (this.layoutStatus.state === 'error') this.layoutStatus = { state: 'off' };
     this.pages.clear();
     for (const [n] of this.panes) this.paint(n);
     this.schedule();
@@ -238,6 +255,7 @@ export class BilingualPdfViewer {
       }
     }
     this.onStatus?.({
+      layout: this.layoutStatus,
       pages: this.doc?.numPages ?? 0,
       page: this.viewer.currentPageNumber,
       scale: this.viewer.currentScale,
@@ -258,7 +276,15 @@ export class BilingualPdfViewer {
     }
   }
 
-  private async translatePage(n: number) {
+  private translatePage(n: number): Promise<void> {
+    const job = this.runTranslatePage(n).finally(() => {
+      if (this.jobs.get(n) === job) this.jobs.delete(n);
+    });
+    this.jobs.set(n, job);
+    return job;
+  }
+
+  private async runTranslatePage(n: number) {
     const doc = this.doc!;
     const gen = this.generation;
     const data: PageData = { state: 'loading', blocks: [], tr: [], fit: [], width: 0 };
@@ -271,7 +297,9 @@ export class BilingualPdfViewer {
       const content = await page.getTextContent();
       if (gen !== this.generation) return;
       data.width = vp.width;
-      data.blocks = extractBlocks(content.items as TextItemLike[], vp.transform);
+      const regions = await this.detectRegions(page);
+      if (gen !== this.generation) return;
+      data.blocks = extractBlocks(content.items as TextItemLike[], vp.transform, regions);
       data.tr = await this.translateBlocks(data.blocks.map((b) => b.text));
       if (gen !== this.generation) return;
       data.state = 'done';
@@ -282,6 +310,37 @@ export class BilingualPdfViewer {
     }
     this.paint(n);
     this.emit();
+  }
+
+  /** AI 版面分析（开启时）：失败时退回几何规则，并在状态栏提示 */
+  private async detectRegions(page: Parameters<LayoutDetector['detect']>[0]): Promise<Region[] | undefined> {
+    const s = this.getSettings();
+    if (!s.pdf.aiLayout) {
+      this.detector?.dispose();
+      this.detector = null;
+      this.layoutStatus = { state: 'off' };
+      return undefined;
+    }
+    if (this.layoutStatus.state === 'error') return undefined;
+    if (!this.detector) {
+      this.detector = new LayoutDetector();
+      this.detector.onProgress = (loaded, total) => {
+        this.layoutStatus = { state: 'downloading', progress: total ? loaded / total : 0 };
+        this.emit();
+      };
+    }
+    try {
+      const backend = await this.detector.init(s.local.host);
+      if (this.layoutStatus.state !== 'ready') {
+        this.layoutStatus = { state: 'ready', backend };
+        this.emit();
+      }
+      return await this.detector.detect(page);
+    } catch (e) {
+      this.layoutStatus = { state: 'error', message: (e as Error).message || String(e) };
+      this.emit();
+      return undefined;
+    }
   }
 
   private async translateBlocks(texts: string[]): Promise<(string | undefined)[]> {
@@ -355,31 +414,7 @@ export class BilingualPdfViewer {
       pane.append(badge('error', data.error));
       return;
     }
-    const k = canvas.width / data.width; // PDF 单位 → 画布像素
-    const blocks: HTMLElement[] = [];
-    data.blocks.forEach((b, i) => {
-      const tr = data.tr[i];
-      if (!tr) return;
-      const bg = sampleColor(ctx, (b.x - 2) * k, (b.y + b.h / 2) * k);
-      const el = document.createElement('div');
-      el.className = 'bl-block';
-      el.dataset.i = String(i);
-      el.lang = this.getSettings().targetLang;
-      el.textContent = tr; // 纯文本，杜绝 XSS
-      // 用 pdf.js 的缩放变量定位，页面缩放时自动跟随
-      el.style.cssText = [
-        `left: calc(var(--total-scale-factor) * ${b.x - 1}px)`,
-        `top: calc(var(--total-scale-factor) * ${b.y - 1}px)`,
-        `width: calc(var(--total-scale-factor) * ${b.w + 2}px)`,
-        `min-height: calc(var(--total-scale-factor) * ${b.h + 2}px)`,
-        `--bl-size: ${b.size}px`,
-        `background: rgb(${bg.join(' ')})`,
-        `color: ${textColor(ctx, b, k, bg)}`,
-      ].join(';');
-      pane.append(el);
-      blocks.push(el);
-    });
-    this.fit(data, blocks);
+    this.fit(data, drawBlocks(pane, ctx, data, this.getSettings().targetLang));
   }
 
   /** 译文比原文长时缩小字号，直到放进原段落的方框（最多缩到 MIN_FIT，仍放不下就让方框向下延伸） */
@@ -396,6 +431,11 @@ export class BilingualPdfViewer {
     for (const el of need) {
       el.style.height = el.style.minHeight;
       el.style.setProperty('--bl-fit', '1');
+    }
+    // 没有参与排版（未挂到文档、所在页隐藏）就无法测量：先按原字号显示，下次绘制时再算
+    if (!need[0]!.isConnected || need[0]!.clientHeight === 0) {
+      for (const el of need) el.style.removeProperty('height');
+      return;
     }
     const fits = (el: HTMLElement) => el.scrollHeight <= el.clientHeight + 1;
     const over = need.filter((el) => !fits(el));
@@ -415,6 +455,85 @@ export class BilingualPdfViewer {
       data.fit[idx(el)] = f;
       el.style.setProperty('--bl-fit', String(f));
       el.style.removeProperty('height');
+    }
+  }
+
+  /**
+   * 导出翻译后的 PDF：翻译全部页面，生成打印版式（页面画面 + 可选中的译文文字），
+   * 调用浏览器的打印，在打印对话框里选"另存为 PDF"。字体由浏览器嵌入，任何语言都能正确显示。
+   * pdf.js 自己的打印同样是把页面栅格化（150 DPI），这里用相同的分辨率。
+   */
+  async exportPdf(layout: 'translation' | 'dual', onProgress: (done: number, total: number) => void) {
+    const doc = this.doc;
+    if (!doc) return;
+    const total = doc.numPages;
+    let done = 0;
+    // 1. 翻译所有页面（最多 2 页并行，服务的并发由后台控制）
+    const queue = Array.from({ length: total }, (_, i) => i + 1);
+    const worker = async () => {
+      for (let n = queue.shift(); n !== undefined; n = queue.shift()) {
+        const cur = this.pages.get(n);
+        if (this.jobs.has(n)) await this.jobs.get(n);
+        else if (!cur || cur.state === 'error') await this.translatePage(n);
+        onProgress(++done, total * 2);
+      }
+    };
+    await Promise.all([worker(), worker()]);
+
+    // 2. 渲染打印版式
+    const root = document.createElement('div');
+    root.id = 'bl-print';
+    root.className = `bl-print-${layout}`;
+    document.body.append(root);
+    let sheetW = 0;
+    let sheetH = 0;
+    try {
+      for (let n = 1; n <= total; n++) {
+        const page = await doc.getPage(n);
+        const vp = page.getViewport({ scale: PRINT_SCALE });
+        const unit = page.getViewport({ scale: 1 });
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.ceil(vp.width);
+        canvas.height = Math.ceil(vp.height);
+        await page.render({ canvas, viewport: vp }).promise;
+        const sheet = document.createElement('div');
+        sheet.className = 'bl-sheet';
+        // 先放进文档再画译文：缩放字号要测量排版结果
+        root.append(sheet);
+        const makePage = () => {
+          const el = document.createElement('div');
+          el.className = 'bl-sheet-page';
+          el.style.width = `${unit.width}pt`;
+          el.style.height = `${unit.height}pt`;
+          sheet.append(el);
+          return el;
+        };
+        if (layout === 'dual') {
+          const original = makePage();
+          const img = canvas.cloneNode() as HTMLCanvasElement;
+          img.getContext('2d')!.drawImage(canvas, 0, 0);
+          original.append(img);
+        }
+        const translated = makePage();
+        translated.append(canvas);
+        const data = this.pages.get(n);
+        if (data?.state === 'done') {
+          const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+          this.fit(data, drawBlocks(translated, ctx, data, this.getSettings().targetLang));
+        }
+        sheetW = Math.max(sheetW, unit.width * (layout === 'dual' ? 2 : 1));
+        sheetH = Math.max(sheetH, unit.height);
+        page.cleanup();
+        onProgress(++done, total * 2);
+      }
+      const style = document.createElement('style');
+      style.textContent = `@page { size: ${sheetW}pt ${sheetH}pt; margin: 0; }`;
+      root.append(style);
+      document.body.classList.add('bl-printing');
+      window.print();
+    } finally {
+      document.body.classList.remove('bl-printing');
+      root.remove();
     }
   }
 
@@ -458,6 +577,42 @@ export class BilingualPdfViewer {
     ].join(';');
     t.page.append(hl);
   }
+}
+
+/**
+ * 在译文页上画出译文段落：每个段落一个方块，底色和文字颜色取自原页面画面，盖住原文。
+ * 位置、字号都写成 PDF 单位 × --total-scale-factor（pdf.js 的缩放变量；打印版式里设为 pt→px 的换算）。
+ */
+function drawBlocks(
+  container: HTMLElement,
+  ctx: CanvasRenderingContext2D,
+  data: PageData,
+  lang: string,
+): HTMLElement[] {
+  const k = ctx.canvas.width / data.width; // PDF 单位 → 画布像素
+  const blocks: HTMLElement[] = [];
+  data.blocks.forEach((b, i) => {
+    const tr = data.tr[i];
+    if (!tr) return;
+    const bg = sampleColor(ctx, (b.x - 2) * k, (b.y + b.h / 2) * k);
+    const el = document.createElement('div');
+    el.className = 'bl-block';
+    el.dataset.i = String(i);
+    el.lang = lang;
+    el.textContent = tr; // 纯文本，杜绝 XSS
+    el.style.cssText = [
+      `left: calc(var(--total-scale-factor) * ${b.x - 1}px)`,
+      `top: calc(var(--total-scale-factor) * ${b.y - 1}px)`,
+      `width: calc(var(--total-scale-factor) * ${b.w + 2}px)`,
+      `min-height: calc(var(--total-scale-factor) * ${b.h + 2}px)`,
+      `--bl-size: ${b.size}px`,
+      `background: rgb(${bg.join(' ')})`,
+      `color: ${textColor(ctx, b, k, bg)}`,
+    ].join(';');
+    container.append(el);
+    blocks.push(el);
+  });
+  return blocks;
 }
 
 function badge(kind: 'loading' | 'error', text?: string): HTMLElement {

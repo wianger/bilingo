@@ -31,8 +31,15 @@ export interface Settings {
   floatBall: boolean;
   /** YouTube 双语字幕 */
   ytSubtitles: boolean;
+  /** 其他网站的视频（HTML5 字幕轨道）双语字幕 */
+  videoSubtitles: boolean;
   /** PDF：在线 PDF 自动用 Bilingo 阅读器打开；阅读器的显示方式 */
-  pdf: { autoOpen: boolean; mode: PdfMode };
+  pdf: {
+    autoOpen: boolean;
+    mode: PdfMode;
+    /** AI 版面分析（PP-DocLayoutV3，约 66MB，从本地模型的下载源获取） */
+    aiLayout: boolean;
+  };
   autoSites: string[];
   openai: OpenAISettings;
   azure: { key: string; region: string };
@@ -53,7 +60,8 @@ export const DEFAULT_SETTINGS: Settings = {
   scope: 'smart',
   floatBall: true,
   ytSubtitles: false,
-  pdf: { autoOpen: false, mode: 'dual' },
+  videoSubtitles: false,
+  pdf: { autoOpen: false, mode: 'dual', aiLayout: false },
   autoSites: [],
   siteRules: [],
   disabledBuiltinRules: [],

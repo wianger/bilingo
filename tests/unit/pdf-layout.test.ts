@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { extractBlocks, type TextItemLike } from '@/pdf/layout';
+import { decodeRegions, type Region } from '@/pdf/layout-model';
 
 /** 缩放为 1 的视口：PDF 坐标（原点在左下）→ 页面坐标（原点在左上），页面高 800 */
 const VIEWPORT = [1, 0, 0, -1, 0, 800];
@@ -110,5 +111,71 @@ describe('PDF paragraph detection', () => {
     expect(b!.x).toBe(70);
     expect(b!.y).toBeCloseTo(100 - 8.5);
     expect(b!.size).toBe(10);
+  });
+});
+
+describe('PDF paragraphs with AI layout regions', () => {
+  const region = (label: Region['label'], x0: number, y0: number, x1: number, y1: number, order: number): Region => ({
+    label,
+    score: 0.9,
+    x0,
+    y0,
+    x1,
+    y1,
+    order,
+  });
+
+  it('groups lines by region, skips formula regions and keeps uncovered lines', () => {
+    const items = [
+      item('A heading that the model detected', 70, 100),
+      // 首行缩进在几何规则里会被拆开；模型说它们是同一段
+      item('First line of a paragraph that the model', 80, 120),
+      item('detected as one text region on the page.', 70, 132),
+      item('Attention of the queries and the keys = softmax', 150, 160),
+      item('A line that no region covers stays translatable.', 70, 200),
+    ];
+    const regions = [
+      region('paragraph_title', 65, 88, 300, 104, 1),
+      region('text', 65, 108, 320, 136, 2),
+      region('display_formula', 140, 148, 420, 164, 3),
+      region('inline_formula', 100, 108, 140, 124, 4),
+    ];
+    expect(extractBlocks(items, VIEWPORT, regions).map((b) => b.text)).toEqual([
+      'A heading that the model detected',
+      'First line of a paragraph that the model detected as one text region on the page.',
+      'A line that no region covers stays translatable.',
+    ]);
+  });
+
+  it('orders blocks by the model reading order and leaves tables and headers alone', () => {
+    const items = [
+      item('Right column paragraph text goes here.', 320, 100),
+      item('Left column paragraph text goes here.', 70, 100),
+      item('Model accuracy table header cell', 70, 300),
+      item('Journal of Example Studies, Volume 1', 70, 40),
+    ];
+    const regions = [
+      region('text', 315, 88, 560, 104, 2),
+      region('text', 65, 88, 300, 104, 1),
+      region('table', 60, 280, 560, 320, 3),
+      region('header', 60, 30, 560, 44, 0),
+    ];
+    expect(
+      extractBlocks(
+        items,
+        VIEWPORT,
+        [...regions].sort((a, b) => a.order - b.order),
+      ).map((b) => b.text),
+    ).toEqual(['Left column paragraph text goes here.', 'Right column paragraph text goes here.']);
+  });
+});
+
+describe('layout model output', () => {
+  it('decodes rows into page regions sorted by reading order, dropping low scores', () => {
+    // [类别, 置信度, x1, y1, x2, y2, 顺序]，800×800 坐标
+    const rows = new Float32Array([22, 0.9, 400, 400, 800, 800, 5, 17, 0.8, 0, 0, 400, 80, 1, 5, 0.3, 0, 0, 10, 10, 0]);
+    const regions = decodeRegions(rows, 3, 600, 800);
+    expect(regions.map((r) => r.label)).toEqual(['paragraph_title', 'text']);
+    expect(regions[1]).toMatchObject({ x0: 300, y0: 400, x1: 600, y1: 800 });
   });
 });

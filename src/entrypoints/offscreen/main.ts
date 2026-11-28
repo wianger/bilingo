@@ -1,4 +1,5 @@
 // offscreen 文档：常驻托管本地翻译模型（service worker 空闲会被回收，不适合持有 1GB 模型）
+import { exposeApi } from '@/local-llm/frame';
 import { LocalLlmHost } from '@/local-llm/host';
 import { onMessage, sendMessage } from '@/shared/messaging';
 
@@ -36,3 +37,21 @@ onMessage('llmTranslate', async ({ data }) => {
 });
 
 onMessage('llmStatus', () => host.status);
+
+// Safari：这个页面作为 iframe 放在后台页面里，后台直接调用这里的接口
+exposeApi({
+  load: (config) => {
+    touch();
+    return host.load(config);
+  },
+  translate: async (config, texts, targetLang, sourceLangs) => {
+    touch();
+    try {
+      return await host.translate(config, texts, targetLang, sourceLangs);
+    } finally {
+      touch();
+    }
+  },
+  status: () => host.status,
+  dispose: () => host.dispose(),
+});

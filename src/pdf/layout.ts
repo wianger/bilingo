@@ -5,6 +5,8 @@
 // 内容流的顺序通常就是阅读顺序（双栏论文先左栏后右栏），这里沿用它，只在几何上不连续时断开。
 // 公式、图中的小字、页码等不翻译。
 
+import { IGNORED, TRANSLATABLE, type Region } from './layout-model';
+
 /** pdf.js TextItem 中用到的字段 */
 export interface TextItemLike {
   str: string;
@@ -247,7 +249,10 @@ export function isTranslatable(text: string, size: number, width: number, body: 
   if (!CJK.test(text) && !/\p{L}\p{Ll}{2,}/u.test(text)) return false;
   const words = text.match(/\p{L}\p{Ll}{2,}/gu)?.length ?? 0;
   // 作者信息里的邮箱、网址行：人名、机构名机器翻译效果差，保留原文
-  if ((EMAIL.test(text) || /https?:\/\//.test(text)) && words < 8) return false;
+  if (EMAIL.test(text) || /https?:\/\//.test(text)) {
+    const plain = text.replace(/\S+@\S+|https?:\/\/\S+/g, ' ');
+    if ((plain.match(/\p{L}\p{Ll}{2,}/gu)?.length ?? 0) < 8 || /\S+@\S+.*\S+@\S+/.test(text)) return false;
+  }
   // 行间公式：带数学符号、几乎没有普通单词
   if (/[=≤≥≈∑∏∫√∈→±×]/.test(text) && words < 3) return false;
   // 字号明显小于正文、宽度也窄：图表里的标注
@@ -255,8 +260,70 @@ export function isTranslatable(text: string, size: number, width: number, body: 
   return true;
 }
 
-export function extractBlocks(items: TextItemLike[], viewportTransform: Matrix): Block[] {
+/**
+ * 文字条目 → 可翻译的段落。
+ * regions：AI 版面分析得到的区域（可选）。有区域时，每个文字行归入包含它的最小区域：
+ * 同一区域的行就是一段，公式 / 表格 / 图片 / 页眉页脚等区域里的行不翻译；没有被任何区域覆盖的行仍用几何规则处理。
+ */
+export function extractBlocks(items: TextItemLike[], viewportTransform: Matrix, regions?: Region[]): Block[] {
   const lines = toLines(toGlyphs(items, viewportTransform));
+  if (!regions?.length) return heuristicBlocks(lines);
+  const usable = regions.filter((r) => !IGNORED.has(r.label));
+  const groups = new Map<Region, Line[]>();
+  const rest: Line[] = [];
+  for (const l of lines) {
+    const cx = (l.x0 + l.x1) / 2;
+    const cy = l.base - 0.3 * l.size;
+    let best: Region | undefined;
+    let bestArea = Infinity;
+    for (const r of usable) {
+      if (cx < r.x0 - 2 || cx > r.x1 + 2 || cy < r.y0 - 2 || cy > r.y1 + 2) continue;
+      const area = (r.x1 - r.x0) * (r.y1 - r.y0);
+      if (area < bestArea) {
+        best = r;
+        bestArea = area;
+      }
+    }
+    if (!best) rest.push(l);
+    else groups.set(best, [...(groups.get(best) ?? []), l]);
+  }
+  const out: Block[] = [];
+  for (const r of usable) {
+    const ls = groups.get(r);
+    if (!ls || !TRANSLATABLE.has(r.label)) continue;
+    // 同一行（基线接近）按从左到右，否则从上到下；行内公式打断的半行因此回到原位
+    ls.sort((a, b) => (Math.abs(a.base - b.base) < 0.5 * Math.min(a.size, b.size) ? a.x0 - b.x0 : a.base - b.base));
+    const text = joinLines(mergeRows(ls));
+    const size = median(ls.map((l) => l.size));
+    const x0 = Math.min(...ls.map((l) => l.x0));
+    const x1 = Math.max(...ls.map((l) => l.x1));
+    if (!isTranslatable(text, size, x1 - x0, 0, 0)) continue;
+    const top = Math.min(...ls.map((l) => l.base - 0.85 * l.size));
+    const bottom = Math.max(...ls.map((l) => l.base + 0.25 * l.size));
+    out.push({ x: x0, y: top, w: x1 - x0, h: bottom - top, size, text, lines: ls.length });
+  }
+  return [...out, ...heuristicBlocks(rest)];
+}
+
+/** 把基线相同的相邻行片段并成一行（joinLines 只在行与行之间处理连字符） */
+function mergeRows(lines: Line[]): Line[] {
+  const rows: Line[] = [];
+  for (const l of lines) {
+    const last = rows.at(-1);
+    if (last && Math.abs(l.base - last.base) < 0.5 * Math.min(l.size, last.size)) {
+      last.text += (needsSpace(last.text, l.text) ? ' ' : '') + l.text;
+      last.x1 = Math.max(last.x1, l.x1);
+    } else rows.push({ ...l });
+  }
+  return rows;
+}
+
+function median(values: number[]): number {
+  const v = [...values].sort((a, b) => a - b);
+  return v[Math.floor(v.length / 2)] ?? 0;
+}
+
+function heuristicBlocks(lines: Line[]): Block[] {
   const raw = toRawBlocks(lines);
   const body = bodySize(lines);
   // 正文行宽：正文字号的段落里最宽的行（双栏时为栏宽）

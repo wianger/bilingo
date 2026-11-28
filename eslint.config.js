@@ -8,7 +8,15 @@ import ts from 'typescript-eslint';
 
 export default ts.config(
   {
-    ignores: ['.output/', '.wxt/', 'node_modules/', 'test-results/', 'playwright-report/', 'src/paraglide/', 'dist/'],
+    ignores: [
+      '.output/',
+      '.wxt/',
+      'node_modules/',
+      'test-results/',
+      'playwright-report/',
+      'src/paraglide/',
+      '**/dist/',
+    ],
   },
   js.configs.recommended,
   ...ts.configs.recommendedTypeChecked,
@@ -40,11 +48,11 @@ export default ts.config(
     languageOptions: { parserOptions: { parser: ts.parser } },
   },
   {
-    files: ['*.config.{js,ts}', 'scripts/**', 'tests/e2e/**'],
+    files: ['*.config.{js,ts}', 'scripts/**', 'tests/e2e/**', 'tests/webkit/*.mjs'],
     languageOptions: { globals: globals.node },
   },
   {
-    files: ['scripts/**', 'eslint.config.js'],
+    files: ['scripts/**', 'eslint.config.js', 'tests/webkit/*.mjs'],
     ...ts.configs.disableTypeChecked,
   },
 );

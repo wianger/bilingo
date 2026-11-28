@@ -3,34 +3,15 @@
 // 按播放进度分批翻译（当前位置往后约 60 秒，快播完时补下一批，拖动进度时立即翻译新位置）→ 在播放器里叠加显示原文 + 译文。
 import LOGO_SVG from '../../assets/logo.svg?raw';
 import { m } from '@/shared/i18n';
-import { sameLanguage } from '@/shared/langs';
-import { batchLimits, type Settings } from '@/shared/settings';
-import { translateBatch } from '@/shared/translate-client';
-import { cueAt, parseJson3, type Cue, type Json3 } from './captions';
+import type { Settings } from '@/shared/settings';
+import { parseJson3, type Json3 } from './captions';
+import { SubtitleEngine } from './engine';
+import { SubtitleOverlay } from './overlay';
 
 const SOURCE = 'bilingo-yt';
-/** 每次往后翻译的时长、提前多久补下一批 */
-const WINDOW_MS = 60_000;
-const PREFETCH_MS = 40_000;
 /** 拿不到字幕网址时重新询问的时间点；最终等多久仍拿不到就提示"没有字幕" */
 const RETRY_MS = [3000, 6000];
 const CAPTIONS_TIMEOUT_MS = 10_000;
-/** 翻译失败后等多久再重试 */
-const RETRY_AFTER_FAILURE_MS = 10_000;
-
-const OVERLAY_CSS = `
-  :host { all: initial; }
-  .wrap { position: absolute; left: 0; right: 0; bottom: 9%; z-index: 60; display: flex; flex-direction: column;
-    align-items: center; gap: .15em; pointer-events: none; transition: bottom .2s;
-    font-family: "YouTube Noto", Roboto, system-ui, -apple-system, "PingFang SC", "Microsoft YaHei UI", sans-serif; }
-  .wrap.controls { bottom: calc(9% + 40px); }
-  .line { max-width: 86%; padding: .08em .45em; border-radius: .15em; text-align: center; line-height: 1.35;
-    color: #fff; background: rgba(8, 8, 8, .75); white-space: pre-wrap; overflow-wrap: anywhere; }
-  .tr { color: #ffe9a8; }
-  .status { font-size: .7em; opacity: .9; }
-  [hidden] { display: none !important; }
-`;
-
 /** 播放器控制栏里的按钮使用 YouTube 自己的 .ytp-button 样式，只补充图标尺寸与开关状态 */
 const PAGE_CSS = `
   .bilingo-yt-btn { display: inline-flex !important; align-items: center; justify-content: center; vertical-align: top; }
@@ -48,25 +29,16 @@ export class YoutubeSubtitles {
   private urls = new Map<string, string>();
   private videoId: string | null = null;
   private loadedUrl = '';
-  private cues: Cue[] = [];
-  private sourceLang = '';
-  private translations = new Map<number, string>();
-  private pending = new Set<number>();
-  /** 已经请求翻译到的时间点（毫秒） */
-  private horizon = 0;
-  /** 翻译失败后，到这个时间之前不再重试 */
-  private retryAt = 0;
-  private host: HTMLElement | null = null;
-  private wrap!: HTMLElement;
-  private srcLine!: HTMLElement;
-  private trLine!: HTMLElement;
-  private statusLine!: HTMLElement;
-  private shown = -2;
+  private readonly engine: SubtitleEngine;
+  private readonly overlay = new SubtitleOverlay('bilingo-yt-subs');
   private raf = 0;
   private timeout = 0;
   private generation = 0;
 
-  constructor(private getSettings: () => Settings) {}
+  constructor(private getSettings: () => Settings) {
+    this.engine = new SubtitleEngine(getSettings);
+    this.engine.onStatus = (text) => this.overlay.setStatus(text);
+  }
 
   private get enabled() {
     return this.getSettings().ytSubtitles;
@@ -141,7 +113,7 @@ export class YoutubeSubtitles {
     for (const delay of RETRY_MS) setTimeout(ask, delay);
     clearTimeout(this.timeout);
     this.timeout = window.setTimeout(() => {
-      if (!this.cues.length && this.enabled) this.setStatus(m.yt_no_captions());
+      if (!this.engine.size && this.enabled) this.setStatus(m.yt_no_captions());
     }, CAPTIONS_TIMEOUT_MS);
   }
 
@@ -158,13 +130,8 @@ export class YoutubeSubtitles {
       const text = await res.text();
       if (gen !== this.generation) return;
       if (!res.ok || !text) throw new Error(res.ok ? 'empty response' : `HTTP ${res.status}`);
-      this.cues = parseJson3(JSON.parse(text) as Json3);
-      this.sourceLang = u.searchParams.get('lang') ?? '';
-      this.translations.clear();
-      this.pending.clear();
-      this.horizon = 0;
-      this.shown = -2;
-      if (!this.cues.length) {
+      this.engine.setCues(parseJson3(JSON.parse(text) as Json3), u.searchParams.get('lang') ?? '');
+      if (!this.engine.size) {
         this.setStatus(m.yt_no_captions());
         return;
       }
@@ -180,69 +147,10 @@ export class YoutubeSubtitles {
     this.generation++;
     cancelAnimationFrame(this.raf);
     clearTimeout(this.timeout);
-    this.cues = [];
-    this.translations.clear();
-    this.pending.clear();
+    this.engine.reset();
     this.loadedUrl = '';
-    this.horizon = 0;
-    this.shown = -2;
     document.documentElement.classList.remove('bilingo-yt-on');
-    this.host?.remove();
-    this.host = null;
-  }
-
-  // ---------- 翻译 ----------
-
-  private needsTranslation() {
-    return !this.sourceLang || !sameLanguage(this.sourceLang, this.getSettings().targetLang);
-  }
-
-  /** 翻译 [from, to) 时间范围内还没翻译的句子 */
-  private translateRange(from: number, to: number) {
-    if (!this.needsTranslation()) return;
-    const s = this.getSettings();
-    const gen = this.generation;
-    const idx: number[] = [];
-    this.cues.forEach((c, i) => {
-      if (c.end > from && c.start < to && !this.translations.has(i) && !this.pending.has(i)) idx.push(i);
-    });
-    const { maxChars, maxItems } = batchLimits(s);
-    let batch: number[] = [];
-    let chars = 0;
-    const send = (items: number[]) => {
-      items.forEach((i) => this.pending.add(i));
-      translateBatch(
-        items.map((i) => this.cues[i]!.text),
-        s,
-        this.sourceLang || undefined,
-      )
-        .then((out) => {
-          if (gen !== this.generation) return;
-          items.forEach((i, k) => out[k] && this.translations.set(i, out[k]));
-          this.shown = -2; // 让当前字幕重新渲染出译文
-          this.setStatus('');
-        })
-        .catch((e: unknown) => {
-          // 翻译失败要让用户知道（例如没配置 API Key），否则只会看到译文一直不出现；拖动进度或稍后会重试
-          if (gen !== this.generation) return;
-          this.setStatus(m.translate_failed({ msg: (e as Error).message || String(e) }));
-          this.horizon = 0;
-          this.retryAt = Date.now() + RETRY_AFTER_FAILURE_MS;
-        })
-        .finally(() => items.forEach((i) => this.pending.delete(i)));
-    };
-    for (const i of idx) {
-      const len = this.cues[i]!.text.length;
-      if (batch.length && (chars + len > maxChars || batch.length >= maxItems)) {
-        send(batch);
-        batch = [];
-        chars = 0;
-      }
-      batch.push(i);
-      chars += len;
-    }
-    if (batch.length) send(batch);
-    this.horizon = Math.max(this.horizon, to);
+    this.overlay.remove();
   }
 
   // ---------- 渲染 ----------
@@ -253,26 +161,11 @@ export class YoutubeSubtitles {
 
   private mount() {
     const player = this.player();
-    if (!player) return;
-    if (this.host?.isConnected && this.host.parentElement === player) return;
-    this.host?.remove();
-    this.host = document.createElement('div');
-    this.host.id = 'bilingo-yt-subs';
-    Object.assign(this.host.style, { position: 'absolute', inset: '0', pointerEvents: 'none', zIndex: '60' });
-    const shadow = this.host.attachShadow({ mode: 'open' });
-    shadow.innerHTML = `<style>${OVERLAY_CSS}</style>
-      <div class="wrap"><div class="line status" hidden></div><div class="line src" hidden></div><div class="line tr" hidden></div></div>`;
-    this.wrap = shadow.querySelector('.wrap')!;
-    this.statusLine = shadow.querySelector('.status')!;
-    this.srcLine = shadow.querySelector('.src')!;
-    this.trLine = shadow.querySelector('.tr')!;
-    player.appendChild(this.host);
+    if (player) this.overlay.mount(player);
   }
 
   private setStatus(text: string) {
-    if (!this.host) return;
-    this.statusLine.textContent = text;
-    this.statusLine.hidden = !text;
+    this.overlay.setStatus(text);
   }
 
   private loop = () => {
@@ -281,29 +174,11 @@ export class YoutubeSubtitles {
     const video = player?.querySelector<HTMLVideoElement>('video');
     if (!player || !video) return;
     this.mount();
-    // 字号随播放器高度变化（全屏时更大）
-    this.wrap.style.fontSize = `${Math.max(14, Math.min(40, player.clientHeight * 0.042))}px`;
-    this.wrap.classList.toggle('controls', !player.classList.contains('ytp-autohide'));
     const ad = player.classList.contains('ad-showing');
-    this.wrap.hidden = ad;
+    this.overlay.layout(player.clientHeight, !player.classList.contains('ytp-autohide'), ad);
     if (ad) return;
-
-    const t = video.currentTime * 1000;
-    // 往后预翻译；拖动到还没翻译的位置时立即翻译
-    const due = t + PREFETCH_MS > this.horizon || t < this.horizon - WINDOW_MS * 2;
-    if (due && Date.now() >= this.retryAt) {
-      if (t < this.horizon - WINDOW_MS * 2) this.horizon = 0;
-      this.translateRange(t, t + WINDOW_MS);
-    }
-    const i = cueAt(this.cues, t);
-    if (i === this.shown) return;
-    this.shown = i;
-    const cue = this.cues[i];
-    this.srcLine.hidden = !cue;
-    this.srcLine.textContent = cue?.text ?? '';
-    const tr = this.needsTranslation() ? this.translations.get(i) : undefined;
-    this.trLine.hidden = !tr;
-    this.trLine.textContent = tr ?? '';
+    const frame = this.engine.tick(video.currentTime * 1000);
+    if (frame) this.overlay.show(frame);
   };
 
   // ---------- 控制栏按钮 ----------

@@ -33,8 +33,9 @@ Bilingual page translators are great for reading foreign-language content, but t
 - **Bilingual or original in one click.** Translations are inserted under each paragraph. Click the floating button, press <kbd>Alt</kbd>+<kbd>A</kbd>, or use the toolbar popup to switch back.
 - **Translates what matters.** On articles (news, blogs, docs), the main content is detected with [Mozilla Readability](https://github.com/mozilla/readability), the engine behind Firefox Reader View. On other pages, navigation, menus, buttons, tag pills, link lists, code identifiers and screen-reader-only text are skipped.
 - **Site rules you can point and click.** If a site translates the wrong things, open the popup, choose **Choose what to translate…**, click the area, and pick **Don't translate** or **Translate only this**. Rules are generated to match the same kind of area on every page of that site, and can be edited, imported and exported in settings.
-- **PDF translation that keeps the layout.** PDFs open in Bilingo's reader with a translated copy of each page next to the original: every paragraph is replaced in place, while figures, formulas, tables and colours stay as they are. Switch between side by side, translation only and original; hover a paragraph to highlight its counterpart. Works for online PDFs (opened automatically if you enable it, or via the floating button in the browser's own PDF viewer) and local files (drag and drop).
+- **PDF translation that keeps the layout.** PDFs open in Bilingo's reader with a translated copy of each page next to the original: every paragraph is replaced in place, while figures, formulas, tables and colours stay as they are. Switch between side by side, translation only and original; hover a paragraph to highlight its counterpart. Works for online PDFs (opened automatically if you enable it, or via the floating button in the browser's own PDF viewer) and local files (drag and drop). Download a translated or bilingual (side-by-side) PDF with selectable text. Optional **AI layout analysis** (PP-DocLayoutV3 on WebGPU, 66 MB, on-device) recognizes paragraphs, headings, captions, formulas, tables, headers and footers, so formulas and tables are reliably left untouched.
 - **YouTube bilingual subtitles.** Click the Bilingo button in the player's control bar to show the translation under the original subtitles, sentence by sentence, including auto-generated captions and fullscreen. It follows the caption track you pick in YouTube's CC menu and translates ahead as the video plays.
+- **Bilingual subtitles on other video sites.** Any player that exposes HTML5 subtitle tracks (Vimeo, Plyr, `<track>` elements, many course platforms): hover the video, click the Bilingo button in its corner. Bilingo follows the subtitle track you select in the player. Players that draw captions without exposing them (Netflix, TED, Bilibili) aren't covered yet.
 - **Never breaks layouts.** Before and after inserting a translation, Bilingo measures the surrounding containers. If a translation would overflow a fixed-size card or tab strip, it is withdrawn and shown on hover instead.
 - **Lazy and cheap.** Only paragraphs near the viewport are translated, dynamic content is followed automatically, text that is already in your language is skipped, and every result is cached in IndexedDB.
 - **Six engines**, from free and offline to the LLM of your choice (see below).
@@ -84,7 +85,7 @@ npm run build:safari                                     # → .output/safari-mv
 xcrun safari-web-extension-converter .output/safari-mv3  # creates an Xcode project; run it from Xcode
 ```
 
-The Safari build uses a non-persistent background page instead of a service worker. Safari has neither the built-in Translator API nor the offscreen API, so the browser built-in engine and the local LLM are not available there yet. Use one of the other engines.
+The Safari build uses a non-persistent background page instead of a service worker. Safari has no built-in Translator API, so the browser built-in engine isn't available. The local LLM runs in a hidden frame inside the background page (Safari has no offscreen API) and needs WebGPU (Safari 26+). Because the maintainers have no Mac, Safari is checked on GitHub's macOS runners ([Safari / WebKit workflow](.github/workflows/safari.yml)): the extension is converted and compiled with Xcode, and the local-LLM code path (frame → Worker → Transformers.js → WebGPU) runs a real translation in WebKit. Real Safari on those virtual machines gets no GPU adapter, so it hasn't been tested end to end on real Mac hardware yet — reports welcome.
 
 </details>
 
@@ -99,6 +100,8 @@ The Safari build uses a non-persistent background page instead of a service work
 | Fix what a site translates      | Popup → **Choose what to translate…** → click an area (or right-click → **Choose what to translate on this site**)       |
 | YouTube bilingual subtitles     | Click the Bilingo button in the video player's control bar                                                               |
 | Translate a PDF                 | Click the floating button on a PDF, or enable Settings → **Open online PDFs in Bilingo**; drop local files on the reader |
+| Download a translated PDF       | PDF reader → ⬇ → **Translated PDF** / **Bilingual PDF**, then choose “Save as PDF” in the print dialog                   |
+| Subtitles on other video sites  | Turn on the video's subtitles in its player, hover the video and click the Bilingo button in its corner                  |
 | Move the floating button        | Drag it; it snaps to the nearest edge and remembers its position                                                         |
 | Change engine, style, shortcuts | Popup → ⚙ settings                                                                                                       |
 
@@ -180,13 +183,14 @@ The UI uses modern native CSS (OKLCH colors, `light-dark()`, customizable `<sele
 
 - [x] Interface localization (English and Simplified Chinese)
 - [ ] Publish to the Chrome Web Store and Edge Add-ons
-- [ ] Local LLM on Safari (Safari 26 supports WebGPU)
+- [x] Local LLM on Safari (verified in WebKit on CI; needs a test on real Mac hardware)
 - [x] Per-site rules (point-and-click, include / exclude / CSS)
 - [x] YouTube bilingual subtitles
-- [ ] Subtitles on other video sites
+- [x] Subtitles on other video sites (HTML5 subtitle tracks)
+- [ ] Site adapters for players that hide their captions (Netflix, TED, Bilibili)
 - [x] PDF translation (layout-preserving, in the browser)
-- [ ] Download the translated PDF
-- [ ] Optional AI layout model (e.g. DocLayout-YOLO on WebGPU) for complex PDFs
+- [x] Download the translated / bilingual PDF
+- [x] Optional AI layout analysis (PP-DocLayoutV3 on WebGPU)
 
 ## Contributing
 
@@ -194,7 +198,7 @@ Bug reports, site-specific issues ("this page translates badly") and pull reques
 
 ## Acknowledgements
 
-Inspired by [Immersive Translate](https://immersivetranslate.com) and [Read Frog](https://github.com/mengxi-ream/read-frog). Built on [Transformers.js](https://github.com/huggingface/transformers.js), [ONNX Runtime Web](https://onnxruntime.ai), [Mozilla Readability](https://github.com/mozilla/readability) and [WXT](https://wxt.dev). Local models by [Tencent Hunyuan](https://huggingface.co/tencent/Hy-MT2-1.8B) and [Google](https://huggingface.co/google/translategemma-4b-it).
+Inspired by [Immersive Translate](https://immersivetranslate.com) and [Read Frog](https://github.com/mengxi-ream/read-frog). Built on [Transformers.js](https://github.com/huggingface/transformers.js), [ONNX Runtime Web](https://onnxruntime.ai), [Mozilla Readability](https://github.com/mozilla/readability), [PDF.js](https://mozilla.github.io/pdf.js/) and [WXT](https://wxt.dev). Local models by [Tencent Hunyuan](https://huggingface.co/tencent/Hy-MT2-1.8B) and [Google](https://huggingface.co/google/translategemma-4b-it); PDF layout model [PP-DocLayoutV3](https://huggingface.co/PaddlePaddle/PP-DocLayoutV3_onnx) by PaddlePaddle (Apache-2.0, [WebGPU export](https://huggingface.co/traceray/nexus-layout)). The layout-preserving PDF approach follows [BabelDOC](https://github.com/funstory-ai/BabelDOC) / [PDFMathTranslate](https://github.com/PDFMathTranslate/PDFMathTranslate).
 
 ## License
 

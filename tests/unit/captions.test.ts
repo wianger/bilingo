@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cueAt, parseJson3, type Json3 } from '@/subtitles/captions';
+import { cleanVttText, cueAt, fromVttCues, parseJson3, type Json3 } from '@/subtitles/captions';
 
 describe('YouTube json3 captions', () => {
   it('merges manual caption lines into sentences and drops sound labels', () => {
@@ -121,5 +121,36 @@ describe('YouTube json3 captions', () => {
     expect(cueAt(cues, 3000)).toBe(-1);
     expect(cueAt(cues, 4999)).toBe(2);
     expect(cueAt(cues, 6000)).toBe(-1);
+  });
+});
+
+describe('HTML5 (WebVTT) captions', () => {
+  it('strips WebVTT markup and decodes entities', () => {
+    expect(cleanVttText('<v Roger>Hi <c.yellow>there</c> &amp; <i>welcome</i>&nbsp;back</v>')).toBe(
+      'Hi there & welcome back',
+    );
+    expect(cleanVttText('Fish &#38; chips <00:00:01.500>now')).toBe('Fish & chips now');
+  });
+
+  it('merges cue fragments into sentences', () => {
+    const cues = fromVttCues([
+      { startTime: 1, endTime: 3, text: 'In this course we will learn' },
+      { startTime: 3, endTime: 5, text: 'how neural networks work.' },
+      { startTime: 5, endTime: 7, text: "Let's get started." },
+    ]);
+    expect(cues.map((c) => c.text)).toEqual([
+      'In this course we will learn how neural networks work.',
+      "Let's get started.",
+    ]);
+    expect(cues[0]!.start).toBe(1000);
+  });
+
+  it('drops the repeated line of roll-up captions', () => {
+    const cues = fromVttCues([
+      { startTime: 0, endTime: 2, text: 'so today we are going' },
+      { startTime: 2, endTime: 4, text: 'so today we are going\nto talk about GPUs.' },
+      { startTime: 4, endTime: 6, text: 'to talk about GPUs.\nThey are fast.' },
+    ]);
+    expect(cues.map((c) => c.text)).toEqual(['so today we are going to talk about GPUs.', 'They are fast.']);
   });
 });

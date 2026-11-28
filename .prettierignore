@@ -6,3 +6,4 @@ test-results
 playwright-report
 src/paraglide
 project.inlang
+tests/webkit/dist

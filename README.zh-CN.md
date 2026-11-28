@@ -33,8 +33,9 @@
 - **一键切换双语 / 原文**：译文插在每段原文下方。点悬浮按钮、按 <kbd>Alt</kbd>+<kbd>A</kbd>，或在工具栏弹窗里切换。
 - **只翻译该翻译的**：文章类网页（新闻、博客、文档）先用 [Mozilla Readability](https://github.com/mozilla/readability)（Firefox 阅读模式的算法）识别正文；其他网页跳过导航、菜单、按钮、标签胶囊、链接列表、代码标识符和读屏专用的隐藏文字。
 - **点选即可修正的网站规则**：某个网站翻得不对时，在弹窗点 **选择翻译区域…**，在网页上点一下那块区域，选 **不翻译这里** 或 **只翻译这里**。生成的规则会匹配该网站所有页面上的同类区域，也可以在设置里编辑、导入、导出。
-- **保留排版的 PDF 翻译**：PDF 在 Bilingo 阅读器里打开，每页旁边是一份翻译后的副本：每个段落原地替换为译文，图片、公式、表格和颜色保持原样。可以切换双语对照、仅译文、仅原文；鼠标悬停时两边对应的段落同时高亮。支持在线 PDF（可设置为自动打开，或在浏览器自带的 PDF 查看器里点悬浮按钮）和本地文件（拖进阅读器即可）。
+- **保留排版的 PDF 翻译**：PDF 在 Bilingo 阅读器里打开，每页旁边是一份翻译后的副本：每个段落原地替换为译文，图片、公式、表格和颜色保持原样。可以切换双语对照、仅译文、仅原文；鼠标悬停时两边对应的段落同时高亮。支持在线 PDF（可设置为自动打开，或在浏览器自带的 PDF 查看器里点悬浮按钮）和本地文件（拖进阅读器即可）。可以下载译文 PDF 或双语对照 PDF（文字可选中、可搜索）。可选的 **AI 版面分析**（PP-DocLayoutV3，WebGPU 本地运行，约 66MB）能识别正文、标题、图注、公式、表格和页眉页脚，公式和表格不会被误翻译。
 - **YouTube 双语字幕**：点播放器控制栏里的 Bilingo 按钮，原字幕下方就会逐句显示译文，支持自动生成的字幕和全屏。跟随你在 YouTube 字幕菜单里选的轨道，并随播放进度提前翻译。
+- **其他视频网站的双语字幕**：适用于提供 HTML5 字幕轨道的播放器（Vimeo、Plyr、`<track>` 元素、不少课程平台）：鼠标移到视频上，点角落里的 Bilingo 按钮，跟随你在播放器里选的字幕轨道。自己绘制字幕、不公开字幕数据的播放器（Netflix、TED、哔哩哔哩）暂不支持。
 - **不破坏网页布局**：插入译文前后测量周围容器。如果译文会让固定尺寸的卡片、标签条溢出，就撤回译文，改为虚线提示，鼠标悬停显示。
 - **省钱**：只翻译进入视口附近的段落，自动跟随动态加载的内容，跳过已是目标语言的段落，翻译结果缓存在本地（IndexedDB），同一段文字不重复花钱。
 - **6 种翻译引擎**：从免费离线到任选大模型，见下表。
@@ -86,7 +87,7 @@ npm run build:safari                                     # → .output/safari-mv
 xcrun safari-web-extension-converter .output/safari-mv3  # 生成 Xcode 工程，在 Xcode 中运行
 ```
 
-Safari 版后台使用非持久后台页，而不是 service worker。Safari 没有内置 Translator API，也没有 offscreen API，所以暂时不能用浏览器内置翻译和本地大模型，请选用其他引擎。
+Safari 版后台使用非持久后台页，而不是 service worker。Safari 没有内置 Translator API，所以不能用浏览器内置翻译。本地大模型运行在后台页面里的隐藏框架中（Safari 没有 offscreen API），需要 WebGPU（Safari 26 及以上）。维护者没有 Mac，Safari 在 GitHub 的 macOS 机器上验证（[Safari / WebKit 工作流](.github/workflows/safari.yml)）：用 Xcode 转换并编译扩展，并在 WebKit 里实际运行本地大模型的代码路径（框架 → Worker → Transformers.js → WebGPU）完成翻译。这些虚拟机上的真实 Safari 拿不到 GPU，所以还没有在真实的 Mac 上完整测试过，欢迎反馈。
 
 </details>
 
@@ -101,6 +102,8 @@ Safari 版后台使用非持久后台页，而不是 service worker。Safari 没
 | 修正某个网站翻译的范围 | 弹窗 → **选择翻译区域…** → 点选区域（或右键 → **设置此网站的翻译区域**）           |
 | YouTube 双语字幕       | 点视频播放器控制栏里的 Bilingo 按钮                                                |
 | 翻译 PDF               | 在 PDF 上点悬浮按钮，或开启 设置 → **用 Bilingo 打开在线 PDF**；本地文件拖进阅读器 |
+| 下载翻译后的 PDF       | PDF 阅读器 → ⬇ → **译文 PDF** / **双语 PDF**，在打印对话框里选“另存为 PDF”         |
+| 其他视频网站的字幕     | 先在播放器里打开字幕，鼠标移到视频上，点角落里的 Bilingo 按钮                      |
 | 移动悬浮按钮           | 直接拖动，松开后吸附到最近的边缘，并记住位置                                       |
 | 换引擎、样式、快捷键   | 弹窗 → ⚙ 设置                                                                      |
 
@@ -180,13 +183,14 @@ src/
 
 - [x] 界面多语言（英文、简体中文）
 - [ ] 上架 Chrome 应用商店和 Edge 加载项商店
-- [ ] Safari 上的本地大模型（Safari 26 已支持 WebGPU）
+- [x] Safari 上的本地大模型（已在 CI 的 WebKit 中验证，尚需在真实 Mac 上测试）
 - [x] 按网站自定义规则（网页上点选，翻译 / 不翻译 / CSS）
 - [x] YouTube 双语字幕
-- [ ] 其他视频网站的字幕
+- [x] 其他视频网站的字幕（HTML5 字幕轨道）
+- [ ] 为隐藏字幕数据的播放器做适配（Netflix、TED、哔哩哔哩）
 - [x] PDF 翻译（保留排版，在浏览器内完成）
-- [ ] 下载翻译后的 PDF
-- [ ] 可选的 AI 版面分析模型（如 WebGPU 上的 DocLayout-YOLO），处理复杂排版
+- [x] 下载译文 / 双语 PDF
+- [x] 可选的 AI 版面分析（WebGPU 上的 PP-DocLayoutV3）
 
 ## 参与贡献
 
@@ -194,7 +198,7 @@ src/
 
 ## 致谢
 
-灵感来自 [沉浸式翻译](https://immersivetranslate.com) 和 [Read Frog](https://github.com/mengxi-ream/read-frog)。基于 [Transformers.js](https://github.com/huggingface/transformers.js)、[ONNX Runtime Web](https://onnxruntime.ai)、[Mozilla Readability](https://github.com/mozilla/readability) 和 [WXT](https://wxt.dev) 构建。本地模型来自 [腾讯混元](https://huggingface.co/tencent/Hy-MT2-1.8B) 和 [Google](https://huggingface.co/google/translategemma-4b-it)。
+灵感来自 [沉浸式翻译](https://immersivetranslate.com) 和 [Read Frog](https://github.com/mengxi-ream/read-frog)。基于 [Transformers.js](https://github.com/huggingface/transformers.js)、[ONNX Runtime Web](https://onnxruntime.ai)、[Mozilla Readability](https://github.com/mozilla/readability)、[PDF.js](https://mozilla.github.io/pdf.js/) 和 [WXT](https://wxt.dev) 构建。本地模型来自 [腾讯混元](https://huggingface.co/tencent/Hy-MT2-1.8B) 和 [Google](https://huggingface.co/google/translategemma-4b-it)；PDF 版面分析模型 [PP-DocLayoutV3](https://huggingface.co/PaddlePaddle/PP-DocLayoutV3_onnx) 来自飞桨（Apache-2.0，[WebGPU 版导出](https://huggingface.co/traceray/nexus-layout)）。保留排版的 PDF 翻译思路参考了 [BabelDOC](https://github.com/funstory-ai/BabelDOC) / [PDFMathTranslate](https://github.com/PDFMathTranslate/PDFMathTranslate)。
 
 ## 许可证
 

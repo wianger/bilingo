@@ -1,6 +1,7 @@
 // 本地大模型（Hy-MT2 + WebGPU），实际推理在 offscreen 文档的 Worker 中进行
 import { uiLocale } from '@/shared/i18n';
 import { m } from '@/shared/i18n';
+import { canUseFrame, frameApi, removeFrame } from '@/local-llm/frame';
 import { findPreset, formatOf } from '@/local-llm/models';
 import type { LocalModelConfig } from '@/local-llm/protocol';
 import { sendMessage } from '@/shared/messaging';
@@ -13,6 +14,9 @@ let creating: Promise<void> | null = null;
 function hasOffscreen(): boolean {
   return typeof browser.offscreen?.createDocument === 'function';
 }
+
+/** 没有 offscreen API、但后台是有 DOM 的页面（Safari）：用隐藏 iframe 托管同一个页面 */
+const useFrame = () => !hasOffscreen() && canUseFrame();
 
 export async function ensureOffscreen(): Promise<void> {
   if (!hasOffscreen()) {
@@ -34,6 +38,7 @@ export async function ensureOffscreen(): Promise<void> {
 }
 
 export async function closeOffscreen(): Promise<void> {
+  if (useFrame()) return removeFrame();
   if (!hasOffscreen()) return;
   await browser.offscreen.closeDocument().catch(() => {});
 }
@@ -55,6 +60,7 @@ async function detectSource(text: string): Promise<string | undefined> {
 }
 
 export async function prepareLocal(s: Settings): Promise<void> {
+  if (useFrame()) return (await frameApi(browser.runtime.getURL(OFFSCREEN_URL))).load(localConfig(s));
   await ensureOffscreen();
   await sendMessage('llmLoad', { config: localConfig(s) });
 }
@@ -65,6 +71,10 @@ export async function translateLocal(texts: string[], s: Settings): Promise<stri
     config.format === 'translategemma'
       ? await Promise.all(texts.map(async (t) => (await detectSource(t)) ?? ''))
       : undefined;
+  if (useFrame()) {
+    const api = await frameApi(browser.runtime.getURL(OFFSCREEN_URL));
+    return api.translate(config, texts, s.targetLang, sourceLangs);
+  }
   await ensureOffscreen();
   return sendMessage('llmTranslate', { config, texts, targetLang: s.targetLang, sourceLangs });
 }

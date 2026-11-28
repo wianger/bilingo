@@ -159,3 +159,57 @@ export function cueAt(cues: Cue[], ms: number): number {
   }
   return -1;
 }
+
+/** WebVTT 字幕条目（来自 HTML5 视频的 TextTrack） */
+export interface VttCueLike {
+  /** 秒 */
+  startTime: number;
+  endTime: number;
+  text: string;
+}
+
+const ENTITIES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  nbsp: ' ',
+  quot: '"',
+  apos: "'",
+  lrm: '',
+  rlm: '',
+};
+
+/** 去掉 WebVTT 的标签（<v 说话人>、<c.颜色>、<i>、<00:00:01.000> 时间戳）并还原实体 */
+export function cleanVttText(text: string): string {
+  return text
+    .replace(/<[^>]*>/g, '')
+    .replace(/&(#\d+|[a-z]+);/gi, (all, e: string) =>
+      e.startsWith('#') ? String.fromCodePoint(Number(e.slice(1))) : (ENTITIES[e.toLowerCase()] ?? all),
+    )
+    .trim();
+}
+
+/**
+ * HTML5 视频的字幕条目 → 句子。
+ * 滚动式字幕（自动字幕常见）每条会重复上一条的最后一行，去掉重复的行后再按句子合并。
+ */
+export function fromVttCues(cues: VttCueLike[]): Cue[] {
+  const events: Json3Event[] = [];
+  let lastLine = '';
+  for (const c of [...cues].sort((a, b) => a.startTime - b.startTime)) {
+    const lines = cleanVttText(c.text)
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+    const fresh = lines.filter((l, i) => !(i === 0 && l === lastLine));
+    if (lines.length) lastLine = lines.at(-1)!;
+    if (!fresh.length) continue;
+    const start = Math.round(c.startTime * 1000);
+    events.push({
+      tStartMs: start,
+      dDurationMs: Math.round(c.endTime * 1000) - start,
+      segs: [{ utf8: fresh.join('\n') }],
+    });
+  }
+  return parseJson3({ events });
+}

@@ -34,7 +34,6 @@ export default defineConfig({
           files.push({ absoluteSrc: `${PDFJS_DIST}${dir}/${f}`, relativeDest: `pdfjs/${dir}/${f}` });
         }
       }
-      if (wxt.config.browser === 'safari') return; // Safari 暂不支持本地大模型
       for (const f of ORT_FILES) files.push({ absoluteSrc: ORT_DIST + f, relativeDest: `ort/${f}` });
     },
     'build:manifestGenerated'(wxt, manifest) {

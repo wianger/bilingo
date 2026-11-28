@@ -109,3 +109,16 @@ describe('language codes', () => {
     expect(sameLanguage('zh-Hant', 'zh-CN')).toBe(false);
   });
 });
+
+describe('HTTP error details', () => {
+  it('shows only the title of an HTML error page, and trims JSON bodies', async () => {
+    const { errorDetail } = await import('@/background/http');
+    expect(
+      errorDetail(
+        '<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN">\n<html><head><title>Sorry...</title></head><body>…</body></html>',
+      ),
+    ).toBe('Sorry...');
+    expect(errorDetail('<html><body>no title</body></html>')).toBe('');
+    expect(errorDetail('{"error":\n  {"message": "quota"}}')).toBe('{"error": {"message": "quota"}}');
+  });
+});
