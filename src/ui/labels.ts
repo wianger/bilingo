@@ -76,6 +76,11 @@ export function styleName(id: TranslationStyle): string {
   }
 }
 
+/** 内置网站规则的说明（新增内置规则时在这里加对应的界面文字） */
+export function builtinRuleNote(_id: string): string | undefined {
+  return undefined;
+}
+
 export function modelName(p: LocalModelPreset): string {
   return p.format === 'hymt' ? m.model_hymt_name() : p.name;
 }

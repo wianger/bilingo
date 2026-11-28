@@ -32,11 +32,16 @@ Bilingual page translators are great for reading foreign-language content, but t
 
 - **Bilingual or original in one click.** Translations are inserted under each paragraph. Click the floating button, press <kbd>Alt</kbd>+<kbd>A</kbd>, or use the toolbar popup to switch back.
 - **Translates what matters.** On articles (news, blogs, docs), the main content is detected with [Mozilla Readability](https://github.com/mozilla/readability), the engine behind Firefox Reader View. On other pages, navigation, menus, buttons, tag pills, link lists, code identifiers and screen-reader-only text are skipped.
+- **Site rules you can point and click.** If a site translates the wrong things, open the popup, choose **Choose what to translate…**, click the area, and pick **Don't translate** or **Translate only this**. Rules are generated to match the same kind of area on every page of that site, and can be edited, imported and exported in settings.
 - **Never breaks layouts.** Before and after inserting a translation, Bilingo measures the surrounding containers. If a translation would overflow a fixed-size card or tab strip, it is withdrawn and shown on hover instead.
 - **Lazy and cheap.** Only paragraphs near the viewport are translated, dynamic content is followed automatically, text that is already in your language is skipped, and every result is cached in IndexedDB.
 - **Six engines**, from free and offline to the LLM of your choice (see below).
 - **English and Chinese interface**, following your browser language or chosen in settings.
 - **Selection translation** from the context menu, a draggable floating button, an "always translate this site" list, 5 translation styles, and light/dark themes.
+
+<p align="center">
+  <img src="docs/images/picker-en.png" alt="Choosing an area of the page to exclude from translation" width="640">
+</p>
 
 <p align="center">
   <img src="docs/images/popup-en.png" alt="Bilingo popup" height="300">
@@ -83,14 +88,15 @@ The Safari build uses a non-persistent background page instead of a service work
 
 ## Usage
 
-| Action                          | How                                                                                    |
-| ------------------------------- | -------------------------------------------------------------------------------------- |
-| Translate / show original       | Click the floating Bilingo button, press <kbd>Alt</kbd>+<kbd>A</kbd>, or use the popup |
-| Translate a selection           | Select text → right-click → **Translate “…”**                                          |
-| Translation that didn't fit     | Text with a dotted underline: hover to see its translation                             |
-| Always translate a site         | Popup → **Always translate this site**                                                 |
-| Move the floating button        | Drag it; it snaps to the nearest edge and remembers its position                       |
-| Change engine, style, shortcuts | Popup → ⚙ settings                                                                     |
+| Action                          | How                                                                                                                |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Translate / show original       | Click the floating Bilingo button, press <kbd>Alt</kbd>+<kbd>A</kbd>, or use the popup                             |
+| Translate a selection           | Select text → right-click → **Translate “…”**                                                                      |
+| Translation that didn't fit     | Text with a dotted underline: hover to see its translation                                                         |
+| Always translate a site         | Popup → **Always translate this site**                                                                             |
+| Fix what a site translates      | Popup → **Choose what to translate…** → click an area (or right-click → **Choose what to translate on this site**) |
+| Move the floating button        | Drag it; it snaps to the nearest edge and remembers its position                                                   |
+| Change engine, style, shortcuts | Popup → ⚙ settings                                                                                                 |
 
 > The interface is available in English and Simplified Chinese. It follows your browser language by default; change it in Settings → Interface language. Pages can be translated into 15 target languages. Want Bilingo in your language? See [CONTRIBUTING.md](CONTRIBUTING.md#translating-the-interface).
 
@@ -166,7 +172,7 @@ The UI uses modern native CSS (OKLCH colors, `light-dark()`, customizable `<sele
 - [x] Interface localization (English and Simplified Chinese)
 - [ ] Publish to the Chrome Web Store and Edge Add-ons
 - [ ] Local LLM on Safari (Safari 26 supports WebGPU)
-- [ ] Per-site rules (include / exclude selectors)
+- [x] Per-site rules (point-and-click, include / exclude / CSS)
 - [ ] PDF and video subtitle translation
 
 ## Contributing

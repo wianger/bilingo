@@ -1,6 +1,10 @@
 // 端到端测试：在真实 Chromium 里加载构建产物，用本地模拟的 OpenAI 兼容接口验证整条翻译链路
 declare const chrome: {
   storage: { local: { set(v: unknown): Promise<void>; get(k: string): Promise<Record<string, unknown>> } };
+  tabs: {
+    query(q: { url: string }): Promise<{ id?: number }[]>;
+    sendMessage(tabId: number, msg: unknown): Promise<unknown>;
+  };
 };
 import { test as base, chromium, expect, type BrowserContext, type Worker } from '@playwright/test';
 import { createServer, type Server } from 'node:http';
@@ -308,4 +312,71 @@ test('interface language follows the browser and can be switched in settings', a
   await options.locator('select').nth(1).selectOption('en');
   await expect(options.locator('h1')).toHaveText('Settings');
   await expect(page.locator('#bilingo-host').locator('.ball')).toHaveAttribute('aria-label', 'Bilingo translate');
+});
+
+/** 设置 OpenAI 模拟接口和网站规则 */
+async function useMockEngine(sw: Worker, extra: Record<string, unknown> = {}) {
+  await sw.evaluate(
+    async ([baseUrl, extra]) => {
+      await chrome.storage.local.set({
+        settings: {
+          provider: 'openai',
+          targetLang: 'zh-CN',
+          openai: { baseUrl, apiKey: 'test', model: 'mock' },
+          ...extra,
+        },
+      });
+    },
+    [`${origin}/v1`, extra] as const,
+  );
+}
+
+test('site rules exclude and include areas', async ({ context, sw }) => {
+  await useMockEngine(sw, {
+    siteRules: [{ id: 'user:t', matches: ['127.0.0.1'], exclude: ['#p5'] }],
+  });
+  const page = await context.newPage();
+  await page.goto(`${origin}/article`);
+  await page.locator('#bilingo-host').locator('.ball').click();
+  await expect(page.locator('#p1 .bilingo-tr')).toBeVisible();
+  await page.locator('#p5').scrollIntoViewIfNeeded();
+  await page.waitForTimeout(600);
+  await expect(page.locator('#p5 [data-bilingo], #p5.bilingo-tr, #p5 .bilingo-tr')).toHaveCount(0);
+
+  // "只翻译这些区域"优先于正文识别：只翻译侧边栏
+  await useMockEngine(sw, { siteRules: [{ id: 'user:t', matches: ['127.0.0.1'], include: ['#side'] }] });
+  await expect(page.locator('#promo .bilingo-tr')).toBeVisible();
+  await expect(page.locator('#p1 .bilingo-tr')).toHaveCount(0);
+});
+
+test('picking an area on the page creates a site rule', async ({ context, sw }) => {
+  await useMockEngine(sw);
+  const page = await context.newPage();
+  await page.goto(`${origin}/article`);
+  await page.locator('#bilingo-host .ball').waitFor({ state: 'attached' });
+
+  // 相当于在弹窗里点"选择翻译区域…"
+  await sw.evaluate(async () => {
+    const [tab] = await chrome.tabs.query({ url: 'http://127.0.0.1/*' });
+    await chrome.tabs.sendMessage(tab!.id!, { id: 1, type: 'startPicker', data: undefined, timestamp: Date.now() });
+  });
+  const picker = page.locator('#bilingo-picker');
+  await expect(picker.locator('.panel')).toBeVisible();
+
+  // 点击侧边栏里的推广段落，再扩大到整个侧边栏
+  await page.locator('#promo').click();
+  await expect(picker.locator('input')).toHaveValue('p#promo');
+  await picker.getByRole('button', { name: 'Expand' }).click();
+  await expect(picker.locator('input')).toHaveValue('aside#side');
+  await expect(picker.locator('.count')).toHaveText('Matches on this page: 1');
+  await picker.getByRole('button', { name: "Don't translate" }).click();
+  await expect(picker).toHaveCount(0);
+
+  // 规则已保存，页面按新规则翻译：正文翻译了，侧边栏没有
+  const saved = await sw.evaluate(async () => (await chrome.storage.local.get('settings')).settings);
+  expect((saved as { siteRules: unknown[] }).siteRules).toEqual([
+    { id: 'site:127.0.0.1', matches: ['127.0.0.1'], exclude: ['aside#side'] },
+  ]);
+  await expect(page.locator('#p1 .bilingo-tr')).toBeVisible();
+  await expect(page.locator('#side .bilingo-tr')).toHaveCount(0);
 });

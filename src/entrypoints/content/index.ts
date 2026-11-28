@@ -2,7 +2,8 @@ import { m, setUiLang } from '@/shared/i18n';
 import { PageTranslator, translateBatch } from '@/content/page-translator';
 import { PageUI } from '@/content/page-ui';
 import { onMessage } from '@/shared/messaging';
-import { DEFAULT_SETTINGS, getSettings, watchSettings, type Settings } from '@/shared/settings';
+import { DEFAULT_SETTINGS, getSettings, saveSettings, watchSettings, type Settings } from '@/shared/settings';
+import { ElementPicker, type PickAction } from '@/content/picker';
 import './style.css';
 
 declare global {
@@ -62,12 +63,40 @@ export default defineContentScript({
       void translateSelection();
     });
 
+    // 网页上点选区域 → 写入当前网站的用户规则 → 重新翻译
+    const picker = new ElementPicker((action, selector) => void saveRule(action, selector));
+    onMessage('startPicker', () => picker.start());
+
+    async function saveRule(action: PickAction, selector: string) {
+      const host = location.hostname.replace(/^www\./, '');
+      const id = `site:${host}`;
+      const rules = structuredClone(settings.siteRules);
+      let rule = rules.find((r) => r.id === id);
+      if (!rule) {
+        rule = { id, matches: [host] };
+        rules.push(rule);
+      }
+      const list = (rule[action] ??= []);
+      if (!list.includes(selector)) list.push(selector);
+      settings = await saveSettings({ siteRules: rules });
+      if (translator.active) {
+        translator.restore();
+      }
+      translator.start();
+      const msg = action === 'exclude' ? m.picker_saved_exclude({ host }) : m.picker_saved_include({ host });
+      ui.showBubble(new DOMRect(innerWidth / 2 - 150, 16, 300, 0), msg, 'ok', true);
+      setTimeout(() => ui.hideHint(), 3500);
+    }
+
     watchSettings((next) => {
       const prev = settings;
       settings = next;
       if (setUiLang(next.uiLang)) ui.applyLabels();
       if (prev.style !== next.style) translator.restyle(next.style);
-      if (prev.scope !== next.scope && translator.active) {
+      const rulesChanged =
+        JSON.stringify([prev.siteRules, prev.disabledBuiltinRules]) !==
+        JSON.stringify([next.siteRules, next.disabledBuiltinRules]);
+      if ((prev.scope !== next.scope || rulesChanged) && translator.active) {
         translator.restore();
         translator.start();
       }

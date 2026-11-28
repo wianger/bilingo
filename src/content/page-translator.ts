@@ -4,6 +4,7 @@ import { detectLanguage, translateBuiltin } from '@/shared/builtin';
 import { sameLanguage } from '@/shared/langs';
 import { sendMessage } from '@/shared/messaging';
 import { detectMainContent, type MainContent } from './main-content';
+import { resolveRules, type ResolvedRules } from '@/shared/site-rules';
 import { batchLimits, type Settings } from '@/shared/settings';
 import {
   collectSegments,
@@ -69,6 +70,9 @@ export class PageTranslator {
   private hints = new WeakMap<Element, string>();
   /** 识别出的正文区域；null 表示不是文章类网页，按全页规则翻译 */
   private main: MainContent | null = null;
+  /** 当前网址生效的网站规则 */
+  private rules: ResolvedRules = { ids: [], include: [], exclude: [], css: '' };
+  private siteStyle: HTMLStyleElement | null = null;
 
   constructor(private getSettings: () => Settings) {}
 
@@ -81,6 +85,7 @@ export class PageTranslator {
     this.active = true;
     this.generation++;
     this.io = new IntersectionObserver((entries) => this.onIntersect(entries), { rootMargin: '600px 0px' });
+    this.applySiteRules();
     this.scanPage();
     this.mo = new MutationObserver((m) => this.onMutations(m));
     this.mo.observe(document.body, { childList: true, subtree: true });
@@ -95,6 +100,8 @@ export class PageTranslator {
     this.queue.clear();
     this.pendingRoots.clear();
     this.main = null;
+    this.siteStyle?.remove();
+    this.siteStyle = null;
     document.querySelectorAll('.bilingo-tr, .bilingo-loading, .bilingo-error').forEach((n) => n.remove());
     for (const el of this.touched) el.removeAttribute(STATE_ATTR);
     this.touched.clear();
@@ -125,7 +132,30 @@ export class PageTranslator {
   }
 
   /** 智能模式下先识别正文区域：是文章页就只翻译正文和标题，否则翻译全页 */
+  /** 读取当前网址的网站规则，并注入规则里的 CSS */
+  private applySiteRules() {
+    const s = this.settings;
+    this.rules = resolveRules(new URL(location.href), s.siteRules, s.disabledBuiltinRules);
+    this.siteStyle?.remove();
+    this.siteStyle = null;
+    if (this.rules.css) {
+      this.siteStyle = document.createElement('style');
+      this.siteStyle.id = 'bilingo-site-css';
+      this.siteStyle.textContent = this.rules.css;
+      (document.head ?? document.documentElement).appendChild(this.siteStyle);
+    }
+  }
+
   private scanPage() {
+    // 网站规则指定了"只翻译这些区域"：以规则为准，不再自动识别正文
+    if (this.rules.include.length) {
+      const roots = [...document.querySelectorAll(this.rules.include.join(','))].filter(
+        (el, _, all) => !all.some((o) => o !== el && o.contains(el)),
+      );
+      this.main = { roots, headings: [] };
+      for (const r of roots) this.scan(r);
+      return;
+    }
     this.main = this.settings.scope !== 'all' ? detectMainContent() : null;
     if (!this.main) {
       this.scan(document.body);
@@ -139,7 +169,11 @@ export class PageTranslator {
   }
 
   private scan(root: Element) {
-    const opts = { target: this.settings.targetLang, smart: this.settings.scope !== 'all' };
+    const opts = {
+      target: this.settings.targetLang,
+      smart: this.settings.scope !== 'all',
+      exclude: this.rules.exclude.join(',') || undefined,
+    };
     for (const el of collectSegments(root, opts)) {
       this.src.set(el, getText(el));
       this.setState(el, 'wait');
@@ -301,12 +335,13 @@ export class PageTranslator {
     const roots = [...this.pendingRoots];
     this.pendingRoots.clear();
     // 单页应用换了页面、原来的正文区域已不在：重新识别
-    if (this.main && this.main.roots.every((r) => !r.isConnected)) {
+    if (this.main && (this.main.roots.length === 0 || this.main.roots.every((r) => !r.isConnected))) {
       this.scanPage();
       return;
     }
     for (const r of roots) {
       if (!r.isConnected || r.closest(`[${STATE_ATTR}]`) || r.closest(SKIP_CONTEXT) || !this.inScope(r)) continue;
+      if (this.rules.exclude.length && r.closest(this.rules.exclude.join(','))) continue;
       this.scan(r);
     }
   }

@@ -1,3 +1,4 @@
+import type { SiteRule } from './site-rules';
 import { storage } from 'wxt/utils/storage';
 
 export type ProviderId = 'builtin' | 'local' | 'google' | 'azure' | 'deepl' | 'openai';
@@ -30,6 +31,10 @@ export interface Settings {
   openai: OpenAISettings;
   azure: { key: string; region: string };
   deepl: { key: string };
+  /** 用户的网站规则 */
+  siteRules: SiteRule[];
+  /** 停用的内置网站规则 id */
+  disabledBuiltinRules: string[];
   /** 本地大模型（Transformers.js + WebGPU） */
   local: { model: string; host: string };
 }
@@ -42,6 +47,8 @@ export const DEFAULT_SETTINGS: Settings = {
   scope: 'smart',
   floatBall: true,
   autoSites: [],
+  siteRules: [],
+  disabledBuiltinRules: [],
   openai: {
     baseUrl: 'https://api.deepseek.com/v1',
     apiKey: '',

@@ -130,6 +130,23 @@ for (const lang of ['en', 'zh-CN']) {
   await popup.locator('main').screenshot({ path: `${OUT}popup-${lang}.png` });
   console.log(`docs/images/popup-${lang}.png`);
 
+  // 网页上点选区域：锁定文章的代码块所在区域
+  const pick = await context.newPage();
+  await pick.setViewportSize({ width: 1200, height: 860 });
+  await pick.goto(site);
+  await pick.locator('#bilingo-host .ball').waitFor({ state: 'attached' });
+  await sw.evaluate(async () => {
+    // 演示站点开着多个标签页时，发给最新打开的那个
+    const tab = (await chrome.tabs.query({ url: 'http://blog.example.com/*' })).at(-1);
+    await chrome.tabs.sendMessage(tab.id, { id: 1, type: 'startPicker', data: undefined, timestamp: Date.now() });
+  });
+  await pick.locator('#bilingo-picker .panel').waitFor();
+  await pick.locator('header nav').click();
+  await pick.waitForTimeout(400);
+  await pick.screenshot({ path: `${OUT}picker-${lang}.png` });
+  console.log(`docs/images/picker-${lang}.png`);
+  await pick.close();
+
   const options = await context.newPage();
   await options.setViewportSize({ width: 1200, height: 1000 });
   await options.goto(`chrome-extension://${extId}/options.html`);

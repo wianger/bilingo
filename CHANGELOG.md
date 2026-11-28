@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- Site rules: per-site "translate only" / "don't translate" areas and custom CSS. Create them by clicking an area of the page (popup → Choose what to translate…, or the context menu); the generated selectors avoid hashed class names and `nth-child`, so they keep working on other pages of the same site. Edit, import and export rules in settings. Built-in rules are supported but none ship yet: the candidate YouTube rule turned out unnecessary on today's YouTube.
 - English interface. The UI follows the browser language by default and can be switched in Settings → Interface language, taking effect immediately in the popup, settings page, in-page button and context menus. Built with Paraglide JS (compile-time, type-safe messages); the extension name and description are localized through `_locales`.
 
 ## [0.2.0] - 2026-11-28

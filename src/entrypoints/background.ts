@@ -31,16 +31,24 @@ export default defineBackground(() => {
     await browser.contextMenus.removeAll();
     browser.contextMenus.create({ id: 'bilingo-page', title: m.menu_page(), contexts: ['page'] });
     browser.contextMenus.create({ id: 'bilingo-selection', title: m.menu_selection(), contexts: ['selection'] });
+    browser.contextMenus.create({ id: 'bilingo-pick', title: m.menu_pick(), contexts: ['page'] });
   }
 
   async function updateMenuTitles() {
     await browser.contextMenus.update('bilingo-page', { title: m.menu_page() }).catch(() => {});
     await browser.contextMenus.update('bilingo-selection', { title: m.menu_selection() }).catch(() => {});
+    await browser.contextMenus.update('bilingo-pick', { title: m.menu_pick() }).catch(() => {});
   }
 
   browser.contextMenus.onClicked.addListener((info, tab) => {
     if (!tab?.id) return;
-    sendToTab(tab.id, info.menuItemId === 'bilingo-selection' ? 'translateSelection' : 'toggle').catch(() => {});
+    const action =
+      info.menuItemId === 'bilingo-selection'
+        ? 'translateSelection'
+        : info.menuItemId === 'bilingo-pick'
+          ? 'startPicker'
+          : 'toggle';
+    sendToTab(tab.id, action).catch(() => {});
   });
 
   browser.commands.onCommand.addListener((command) => {

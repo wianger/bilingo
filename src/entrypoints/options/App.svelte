@@ -16,6 +16,11 @@
   import { PROVIDER_ICONS } from '@/ui/provider-icons';
   import { modelDesc, modelLicense, modelName, providerDesc, providerName, providerTags, styleName } from '@/ui/labels';
   import { m, setUiLang, uiLocale } from '@/shared/i18n';
+  import { BUILTIN_RULES, isValidSelector, ruleHost, type SiteRule } from '@/shared/site-rules';
+  import { builtinRuleNote } from '@/ui/labels';
+  import FileDown from '@lucide/svelte/icons/file-down';
+  import FileUp from '@lucide/svelte/icons/file-up';
+  import Plus from '@lucide/svelte/icons/plus';
   import Check from '@lucide/svelte/icons/check';
   import Database from '@lucide/svelte/icons/database';
   import Download from '@lucide/svelte/icons/download';
@@ -289,6 +294,63 @@
     }
     return () => io.disconnect();
   });
+
+  // ---- 网站规则 ----
+  let rulesMsg = $state('');
+  const lines = (v: string) =>
+    v
+      .split('\n')
+      .map((x) => x.trim())
+      .filter(Boolean);
+  const badSelectors = (r: SiteRule) => [...(r.include ?? []), ...(r.exclude ?? [])].filter((x) => !isValidSelector(x));
+
+  function addRule() {
+    s!.siteRules.push({ id: `user:${Date.now().toString(36)}`, matches: [] });
+  }
+
+  function toggleBuiltin(id: string, on: boolean) {
+    const rest = s!.disabledBuiltinRules.filter((x) => x !== id);
+    s!.disabledBuiltinRules = on ? rest : [...rest, id];
+  }
+
+  function exportRules() {
+    const blob = new Blob([JSON.stringify({ bilingoSiteRules: 1, rules: $state.snapshot(s!.siteRules) }, null, 2)], {
+      type: 'application/json',
+    });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'bilingo-site-rules.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
+  /** 导入：接受规则数组或 { rules: [...] }；同 id 的规则会被替换 */
+  async function importRules(file: File | undefined) {
+    if (!file || !s) return;
+    try {
+      const data = JSON.parse(await file.text()) as unknown;
+      const list = Array.isArray(data) ? data : (data as { rules?: unknown }).rules;
+      if (!Array.isArray(list)) throw new Error('expected an array of rules');
+      const rules = list.map((r: Partial<SiteRule>, i): SiteRule => {
+        if (!r || !Array.isArray(r.matches) || !r.matches.every((x) => typeof x === 'string')) {
+          throw new Error(`rule ${i + 1}: "matches" must be a list of websites`);
+        }
+        const strs = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
+        return {
+          id: typeof r.id === 'string' && r.id ? r.id : `user:${Date.now().toString(36)}${i}`,
+          matches: r.matches,
+          include: strs(r.include),
+          exclude: strs(r.exclude),
+          css: typeof r.css === 'string' ? r.css : undefined,
+        };
+      });
+      const ids = new Set(rules.map((r) => r.id));
+      s.siteRules = [...s.siteRules.filter((r) => !ids.has(r.id)), ...rules];
+      rulesMsg = m.rules_imported({ n: rules.length });
+    } catch (e) {
+      rulesMsg = m.rules_import_failed({ msg: (e as Error).message });
+    }
+  }
 
   const localBusy = $derived(localStatus.state === 'downloading' || localStatus.state === 'loading');
 </script>
@@ -626,6 +688,99 @@
               value={s.autoSites.join('\n')}
               onchange={(e) => (s!.autoSites = e.currentTarget.value.split(/\s+/).filter(Boolean))}></textarea>
           </label>
+
+          <div class="rules">
+            <h3>{m.rules_title()}</h3>
+            <p class="muted">{m.rules_desc()}</p>
+
+            {#if BUILTIN_RULES.length}
+              <div class="field">
+                <span>{m.rules_builtin()}</span>
+                {#each BUILTIN_RULES as r (r.id)}
+                  <label class="row builtin-rule">
+                    <div>
+                      <div><code>{ruleHost(r)}</code></div>
+                      <div class="muted">{builtinRuleNote(r.id) ?? r.note}</div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      class="switch"
+                      checked={!s.disabledBuiltinRules.includes(r.id)}
+                      onchange={(e) => toggleBuiltin(r.id, e.currentTarget.checked)}
+                    />
+                  </label>
+                {/each}
+              </div>
+            {/if}
+
+            <div class="field">
+              <span>{m.rules_user()}</span>
+              {#each s.siteRules as rule, i (rule.id)}
+                {@const bad = badSelectors(rule)}
+                <div class="rule">
+                  <div class="rule-head">
+                    <b>{ruleHost(rule) || m.rules_new_site()}</b>
+                    <button class="btn sm danger" onclick={() => s!.siteRules.splice(i, 1)}>
+                      <Trash2 size={13} />
+                      {m.rules_delete()}
+                    </button>
+                  </div>
+                  <label class="field">
+                    <span>{m.rules_matches()}</span>
+                    <textarea
+                      class="input mono"
+                      rows="1"
+                      value={rule.matches.join('\n')}
+                      onchange={(e) => (rule.matches = lines(e.currentTarget.value))}></textarea>
+                  </label>
+                  <div class="grid2">
+                    <label class="field">
+                      <span>{m.rules_include()}</span>
+                      <textarea
+                        class="input mono"
+                        rows="2"
+                        value={(rule.include ?? []).join('\n')}
+                        onchange={(e) => (rule.include = lines(e.currentTarget.value))}></textarea>
+                    </label>
+                    <label class="field">
+                      <span>{m.rules_exclude()}</span>
+                      <textarea
+                        class="input mono"
+                        rows="2"
+                        value={(rule.exclude ?? []).join('\n')}
+                        onchange={(e) => (rule.exclude = lines(e.currentTarget.value))}></textarea>
+                    </label>
+                  </div>
+                  <label class="field">
+                    <span>{m.rules_css()}</span>
+                    <textarea class="input mono" rows="1" bind:value={rule.css}></textarea>
+                  </label>
+                  {#each bad as sel (sel)}<p class="alert err">{m.rules_invalid({ sel })}</p>{/each}
+                </div>
+              {:else}
+                <p class="muted">{m.rules_empty()}</p>
+              {/each}
+            </div>
+
+            <div class="actions">
+              <button class="btn" onclick={addRule}><Plus size={15} /> {m.rules_add()}</button>
+              <label class="btn">
+                <FileUp size={15} />
+                {m.rules_import()}
+                <input
+                  type="file"
+                  accept="application/json,.json"
+                  hidden
+                  onchange={(e) => void importRules(e.currentTarget.files?.[0])}
+                />
+              </label>
+              <button class="btn" onclick={exportRules} disabled={!s.siteRules.length}>
+                <FileDown size={15} />
+                {m.rules_export()}
+              </button>
+            </div>
+            {#if rulesMsg}<p class="muted">{rulesMsg}</p>{/if}
+          </div>
         </section>
 
         <section id="other" class="card">
@@ -1011,6 +1166,40 @@
   }
   summary:hover {
     color: var(--fg);
+  }
+  .rules {
+    display: grid;
+    gap: 14px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+  h3 {
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .builtin-rule {
+    padding-top: 8px;
+    border-top: none;
+  }
+  .rule {
+    display: grid;
+    gap: 12px;
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-2);
+  }
+  .rule :global(.input) {
+    background-color: var(--surface);
+  }
+  .rule-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .mono {
+    font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+    font-size: 12.5px;
   }
   .test {
     display: flex;

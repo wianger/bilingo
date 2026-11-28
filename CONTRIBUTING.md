@@ -24,6 +24,14 @@ npm run lint && npm run check && npm run format:check && npm test && npm run tes
 
 CI runs the same checks. The e2e tests need Playwright's Chromium (`npx playwright install chromium`).
 
+## Site rules
+
+Users create site rules by clicking areas of a page. If a popular site needs a fix for everyone, it can become a built-in rule in `src/shared/site-rules.ts`:
+
+- Add it only after checking it on the live site, with and without the rule, and describe the before/after in the pull request.
+- Prefer stable selectors (`data-testid`, `itemprop`, semantic ids and classes); avoid generated class names and `nth-child`.
+- Add the rule's description to `builtinRuleNote` in `src/ui/labels.ts` and to `messages/*.json`.
+
 ## Translating the interface
 
 Interface text lives in `messages/{locale}.json` and is compiled by [Paraglide JS](https://github.com/opral/paraglide-js) into type-safe functions (`m.key()`).

@@ -17,6 +17,8 @@ interface ProtocolMap {
   status(): { active: boolean };
   retranslate(): { active: boolean };
   translateSelection(): void;
+  /** 在网页上点选区域，生成网站规则 */
+  startPicker(): void;
 
   // 后台 → offscreen 文档（本地大模型）
   llmLoad(data: { config: LocalModelConfig }): void;

@@ -312,10 +312,13 @@ export interface CollectOptions {
   target: string;
   /** 智能模式：跳过网页界面元素 */
   smart: boolean;
+  /** 网站规则：不翻译匹配这些选择器的区域（合并成一个选择器） */
+  exclude?: string;
 }
 
 export function collectSegments(root: Element, opts: CollectOptions, out: Element[] = []): Element[] {
   if (shouldSkip(root) || root.hasAttribute(STATE_ATTR)) return out;
+  if (opts.exclude && root.matches(opts.exclude)) return out;
   if (opts.smart && isUiChrome(root)) return out;
   const target = opts.target;
 
@@ -347,7 +350,7 @@ export function collectSegments(root: Element, opts: CollectOptions, out: Elemen
   };
 
   for (const n of [...root.childNodes]) {
-    if (opts.smart && n instanceof Element && isUiChrome(n)) {
+    if (n instanceof Element && ((opts.exclude && n.matches(opts.exclude)) || (opts.smart && isUiChrome(n)))) {
       // 夹在文字中间的按钮等界面元素：结束当前文字段，自身不翻译
       flushRun();
     } else if (n.nodeType === Node.TEXT_NODE || (n instanceof Element && !isBlockChild(n))) {

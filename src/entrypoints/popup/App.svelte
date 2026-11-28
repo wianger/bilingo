@@ -10,6 +10,8 @@
   import LoaderCircle from '@lucide/svelte/icons/loader-circle';
   import SettingsIcon from '@lucide/svelte/icons/settings';
   import Undo2 from '@lucide/svelte/icons/undo-2';
+  import SquareDashedMousePointer from '@lucide/svelte/icons/square-dashed-mouse-pointer';
+  import { resolveRules } from '@/shared/site-rules';
 
   let settings = $state<Settings | null>(null);
   let tabId = $state<number>();
@@ -17,6 +19,8 @@
   let active = $state(false);
   let supported = $state(true);
   let busy = $state(false);
+  /** 当前网站生效的网站规则条数 */
+  let ruleCount = $state(0);
   /** 界面语言：变化时整个界面重新渲染 */
   let lang = $state(uiLocale());
   const ProviderIcon = $derived(settings ? PROVIDER_ICONS[settings.provider] : null);
@@ -31,6 +35,7 @@
       const url = new URL(tab?.url ?? '');
       hostname = url.hostname;
       supported = /^(https?|file):$/.test(url.protocol);
+      ruleCount = resolveRules(url, settings.siteRules, settings.disabledBuiltinRules).ids.length;
     } catch {
       supported = false;
     }
@@ -58,6 +63,13 @@
   async function change(patch: Partial<Pick<Settings, 'targetLang' | 'provider'>>) {
     settings = await saveSettings(patch);
     if (tabId !== undefined && active) sendToTab(tabId, 'retranslate').catch(() => {});
+  }
+
+  /** 在网页上点选区域：交给内容脚本，弹窗随即关闭让出网页 */
+  async function pick() {
+    if (tabId === undefined) return;
+    await sendToTab(tabId, 'startPicker').catch(() => {});
+    window.close();
   }
 
   async function setAlways(on: boolean) {
@@ -104,6 +116,11 @@
         </button>
         {#if !supported}
           <p class="muted center">{m.popup_unsupported()}</p>
+        {:else}
+          <div class="pick-row">
+            <button class="btn ghost sm" onclick={pick}><SquareDashedMousePointer size={14} /> {m.popup_pick()}</button>
+            {#if ruleCount}<span class="muted">{m.popup_rules_active({ n: ruleCount })}</span>{/if}
+          </div>
         {/if}
       </section>
 
@@ -214,6 +231,16 @@
   .main.primary:hover:not(:disabled) {
     background: var(--gradient);
     filter: brightness(1.07);
+  }
+  .pick-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin: -4px -6px -6px;
+  }
+  .pick-row .muted {
+    font-size: 11.5px;
   }
   .center {
     text-align: center;
