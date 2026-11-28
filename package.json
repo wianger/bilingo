@@ -53,7 +53,8 @@
     "@lucide/svelte": "^1.82.0",
     "@mozilla/readability": "^0.6.0",
     "@webext-core/messaging": "^4.0.2",
-    "idb": "^8.0.4"
+    "idb": "^8.0.4",
+    "pdfjs-dist": "^6.5.438"
   },
   "license": "MIT",
   "author": "Bilingo contributors",

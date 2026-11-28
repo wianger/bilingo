@@ -33,6 +33,7 @@
 - **一键切换双语 / 原文**：译文插在每段原文下方。点悬浮按钮、按 <kbd>Alt</kbd>+<kbd>A</kbd>，或在工具栏弹窗里切换。
 - **只翻译该翻译的**：文章类网页（新闻、博客、文档）先用 [Mozilla Readability](https://github.com/mozilla/readability)（Firefox 阅读模式的算法）识别正文；其他网页跳过导航、菜单、按钮、标签胶囊、链接列表、代码标识符和读屏专用的隐藏文字。
 - **点选即可修正的网站规则**：某个网站翻得不对时，在弹窗点 **选择翻译区域…**，在网页上点一下那块区域，选 **不翻译这里** 或 **只翻译这里**。生成的规则会匹配该网站所有页面上的同类区域，也可以在设置里编辑、导入、导出。
+- **保留排版的 PDF 翻译**：PDF 在 Bilingo 阅读器里打开，每页旁边是一份翻译后的副本：每个段落原地替换为译文，图片、公式、表格和颜色保持原样。可以切换双语对照、仅译文、仅原文；鼠标悬停时两边对应的段落同时高亮。支持在线 PDF（可设置为自动打开，或在浏览器自带的 PDF 查看器里点悬浮按钮）和本地文件（拖进阅读器即可）。
 - **YouTube 双语字幕**：点播放器控制栏里的 Bilingo 按钮，原字幕下方就会逐句显示译文，支持自动生成的字幕和全屏。跟随你在 YouTube 字幕菜单里选的轨道，并随播放进度提前翻译。
 - **不破坏网页布局**：插入译文前后测量周围容器。如果译文会让固定尺寸的卡片、标签条溢出，就撤回译文，改为虚线提示，鼠标悬停显示。
 - **省钱**：只翻译进入视口附近的段落，自动跟随动态加载的内容，跳过已是目标语言的段落，翻译结果缓存在本地（IndexedDB），同一段文字不重复花钱。
@@ -91,16 +92,17 @@ Safari 版后台使用非持久后台页，而不是 service worker。Safari 没
 
 ## 使用
 
-| 操作                   | 方法                                                                     |
-| ---------------------- | ------------------------------------------------------------------------ |
-| 翻译 / 显示原文        | 点网页上的 Bilingo 悬浮按钮，按 <kbd>Alt</kbd>+<kbd>A</kbd>，或用弹窗    |
-| 划词翻译               | 选中文字 → 右键 → **翻译“…”**                                            |
-| 放不下的译文           | 带虚线下划线的文字：鼠标悬停查看译文                                     |
-| 总是翻译某个网站       | 弹窗 → **总是翻译此网站**                                                |
-| 修正某个网站翻译的范围 | 弹窗 → **选择翻译区域…** → 点选区域（或右键 → **设置此网站的翻译区域**） |
-| YouTube 双语字幕       | 点视频播放器控制栏里的 Bilingo 按钮                                      |
-| 移动悬浮按钮           | 直接拖动，松开后吸附到最近的边缘，并记住位置                             |
-| 换引擎、样式、快捷键   | 弹窗 → ⚙ 设置                                                            |
+| 操作                   | 方法                                                                               |
+| ---------------------- | ---------------------------------------------------------------------------------- |
+| 翻译 / 显示原文        | 点网页上的 Bilingo 悬浮按钮，按 <kbd>Alt</kbd>+<kbd>A</kbd>，或用弹窗              |
+| 划词翻译               | 选中文字 → 右键 → **翻译“…”**                                                      |
+| 放不下的译文           | 带虚线下划线的文字：鼠标悬停查看译文                                               |
+| 总是翻译某个网站       | 弹窗 → **总是翻译此网站**                                                          |
+| 修正某个网站翻译的范围 | 弹窗 → **选择翻译区域…** → 点选区域（或右键 → **设置此网站的翻译区域**）           |
+| YouTube 双语字幕       | 点视频播放器控制栏里的 Bilingo 按钮                                                |
+| 翻译 PDF               | 在 PDF 上点悬浮按钮，或开启 设置 → **用 Bilingo 打开在线 PDF**；本地文件拖进阅读器 |
+| 移动悬浮按钮           | 直接拖动，松开后吸附到最近的边缘，并记住位置                                       |
+| 换引擎、样式、快捷键   | 弹窗 → ⚙ 设置                                                                      |
 
 > **注意**：其他同样会拦截 YouTube 字幕请求的扩展（例如其他双语字幕工具）可能与 Bilingo 的 YouTube 字幕冲突。如果字幕不显示，可以先停用它们试试。
 
@@ -153,6 +155,8 @@ src/
 ├─ content/       段落识别、正文识别、页面翻译调度、悬浮 UI
 ├─ background/    翻译队列、IndexedDB 缓存、HTTP 重试、各翻译引擎
 ├─ local-llm/     WebGPU Worker、模型列表、提示词、断点续传下载
+├─ pdf/           PDF 阅读器（pdf.js）、段落识别、在线 PDF 跳转
+├─ subtitles/     YouTube 字幕解析、断句、字幕层
 ├─ shared/        设置、语言表、类型化消息、内置 AI 封装
 ├─ assets/        弹窗和设置页的设计系统 CSS
 └─ ui/            共用 UI 辅助（引擎图标）
@@ -163,11 +167,12 @@ src/
 - **本地大模型**运行在 offscreen 文档里的 Web Worker 中，所有标签页共用一份模型，空闲 10 分钟自动卸载以释放显存。模型按 16 MB 分块用 HTTP Range 下载并存入 Cache Storage，1 GB 的下载中断后可从断点继续。ONNX Runtime 的 WebAssembly 随扩展打包，因为扩展不允许加载远程代码。
 - **正文识别**：在网页副本上运行 Readability，再通过序号属性把结果对应回真实网页；如果多出的文字不多，就把识别区域扩展到包含文章标题。
 - **布局保护**：每批译文插入前后各测量一次附近容器的溢出量（每批只触发两次排版），会造成溢出的译文改为悬停显示。
+- **PDF**：pdf.js 渲染原文；每页渲染完成后，把画面复制到旁边的译文页，按文字的几何位置还原段落（行 → 段落，处理首行缩进、悬挂缩进、行内公式碎片和连字符断词；跳过公式、图中标注和作者信息），再用取样得到的底色和文字颜色，在每个段落的位置盖上写有译文的方块，放不下时缩小字号。在线 PDF 通过 `declarativeNetRequest` 的响应头规则跳转，做法与 Mozilla 官方的 pdf.js 扩展相同（Chrome / Edge 128+）。
 - **安全**：译文一律以 `textContent` 插入，不会被当作 HTML 执行。
 
 ### 技术栈
 
-[WXT](https://wxt.dev)（Manifest V3，跨浏览器含 Safari）· [Svelte 5](https://svelte.dev) · TypeScript 6 · [Transformers.js](https://github.com/huggingface/transformers.js) v4 + WebGPU · [Mozilla Readability](https://github.com/mozilla/readability) · [@webext-core/messaging](https://webext-core.aklinker1.io/) · [idb](https://github.com/jakearchibald/idb) · [Lucide](https://lucide.dev) · Vitest · Playwright · ESLint · Prettier。
+[WXT](https://wxt.dev)（Manifest V3，跨浏览器含 Safari）· [Svelte 5](https://svelte.dev) · TypeScript 6 · [Transformers.js](https://github.com/huggingface/transformers.js) v4 + WebGPU · [Mozilla Readability](https://github.com/mozilla/readability) · [PDF.js](https://mozilla.github.io/pdf.js/) · [@webext-core/messaging](https://webext-core.aklinker1.io/) · [idb](https://github.com/jakearchibald/idb) · [Lucide](https://lucide.dev) · Vitest · Playwright · ESLint · Prettier。
 
 界面没有用 CSS 框架，而是用现代原生 CSS（OKLCH 色彩、`light-dark()`、可定制 `<select>`、`@starting-style`）：网页内的界面在 Shadow DOM 里，而扩展页面只运行在新版浏览器中。
 
@@ -179,7 +184,9 @@ src/
 - [x] 按网站自定义规则（网页上点选，翻译 / 不翻译 / CSS）
 - [x] YouTube 双语字幕
 - [ ] 其他视频网站的字幕
-- [ ] PDF 翻译
+- [x] PDF 翻译（保留排版，在浏览器内完成）
+- [ ] 下载翻译后的 PDF
+- [ ] 可选的 AI 版面分析模型（如 WebGPU 上的 DocLayout-YOLO），处理复杂排版
 
 ## 参与贡献
 

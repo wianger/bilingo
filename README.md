@@ -33,6 +33,7 @@ Bilingual page translators are great for reading foreign-language content, but t
 - **Bilingual or original in one click.** Translations are inserted under each paragraph. Click the floating button, press <kbd>Alt</kbd>+<kbd>A</kbd>, or use the toolbar popup to switch back.
 - **Translates what matters.** On articles (news, blogs, docs), the main content is detected with [Mozilla Readability](https://github.com/mozilla/readability), the engine behind Firefox Reader View. On other pages, navigation, menus, buttons, tag pills, link lists, code identifiers and screen-reader-only text are skipped.
 - **Site rules you can point and click.** If a site translates the wrong things, open the popup, choose **Choose what to translate…**, click the area, and pick **Don't translate** or **Translate only this**. Rules are generated to match the same kind of area on every page of that site, and can be edited, imported and exported in settings.
+- **PDF translation that keeps the layout.** PDFs open in Bilingo's reader with a translated copy of each page next to the original: every paragraph is replaced in place, while figures, formulas, tables and colours stay as they are. Switch between side by side, translation only and original; hover a paragraph to highlight its counterpart. Works for online PDFs (opened automatically if you enable it, or via the floating button in the browser's own PDF viewer) and local files (drag and drop).
 - **YouTube bilingual subtitles.** Click the Bilingo button in the player's control bar to show the translation under the original subtitles, sentence by sentence, including auto-generated captions and fullscreen. It follows the caption track you pick in YouTube's CC menu and translates ahead as the video plays.
 - **Never breaks layouts.** Before and after inserting a translation, Bilingo measures the surrounding containers. If a translation would overflow a fixed-size card or tab strip, it is withdrawn and shown on hover instead.
 - **Lazy and cheap.** Only paragraphs near the viewport are translated, dynamic content is followed automatically, text that is already in your language is skipped, and every result is cached in IndexedDB.
@@ -89,16 +90,17 @@ The Safari build uses a non-persistent background page instead of a service work
 
 ## Usage
 
-| Action                          | How                                                                                                                |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| Translate / show original       | Click the floating Bilingo button, press <kbd>Alt</kbd>+<kbd>A</kbd>, or use the popup                             |
-| Translate a selection           | Select text → right-click → **Translate “…”**                                                                      |
-| Translation that didn't fit     | Text with a dotted underline: hover to see its translation                                                         |
-| Always translate a site         | Popup → **Always translate this site**                                                                             |
-| Fix what a site translates      | Popup → **Choose what to translate…** → click an area (or right-click → **Choose what to translate on this site**) |
-| YouTube bilingual subtitles     | Click the Bilingo button in the video player's control bar                                                         |
-| Move the floating button        | Drag it; it snaps to the nearest edge and remembers its position                                                   |
-| Change engine, style, shortcuts | Popup → ⚙ settings                                                                                                 |
+| Action                          | How                                                                                                                      |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Translate / show original       | Click the floating Bilingo button, press <kbd>Alt</kbd>+<kbd>A</kbd>, or use the popup                                   |
+| Translate a selection           | Select text → right-click → **Translate “…”**                                                                            |
+| Translation that didn't fit     | Text with a dotted underline: hover to see its translation                                                               |
+| Always translate a site         | Popup → **Always translate this site**                                                                                   |
+| Fix what a site translates      | Popup → **Choose what to translate…** → click an area (or right-click → **Choose what to translate on this site**)       |
+| YouTube bilingual subtitles     | Click the Bilingo button in the video player's control bar                                                               |
+| Translate a PDF                 | Click the floating button on a PDF, or enable Settings → **Open online PDFs in Bilingo**; drop local files on the reader |
+| Move the floating button        | Drag it; it snaps to the nearest edge and remembers its position                                                         |
+| Change engine, style, shortcuts | Popup → ⚙ settings                                                                                                       |
 
 > The interface is available in English and Simplified Chinese. It follows your browser language by default; change it in Settings → Interface language. Pages can be translated into 15 target languages. Want Bilingo in your language? See [CONTRIBUTING.md](CONTRIBUTING.md#translating-the-interface).
 
@@ -153,6 +155,8 @@ src/
 ├─ content/       segmenter, main-content detection, page translator, floating UI
 ├─ background/    translation queue, IndexedDB cache, HTTP retry, providers
 ├─ local-llm/     WebGPU worker, model presets, prompts, resumable downloads
+├─ pdf/           PDF reader (pdf.js), paragraph detection, PDF link redirect
+├─ subtitles/     YouTube caption parsing, sentence building, overlay
 ├─ shared/        settings, languages, typed messaging, built-in AI wrapper
 ├─ assets/        design system CSS for the popup and settings pages
 └─ ui/            shared UI helpers (engine icons)
@@ -163,11 +167,12 @@ Highlights:
 - **Local LLM** runs in a Web Worker inside an offscreen document, so one model instance is shared by all tabs. It unloads after 10 idle minutes to free VRAM. Weights download in 16 MB HTTP Range chunks stored in Cache Storage, so an interrupted 1 GB download resumes where it stopped. ONNX Runtime's WebAssembly is bundled, because extensions may not load remote code.
 - **Main-content detection** runs Readability on a clone of the page and maps the result back to the live DOM through index attributes. The region is widened to include the headline when that adds little extra text.
 - **Layout guard**: overflow of nearby containers is measured before and after inserting a batch (two layouts per batch). Any translation that causes overflow becomes a hover hint.
+- **PDF**: pdf.js renders the original; for each rendered page Bilingo copies the canvas into a second page, rebuilds paragraphs from the text items' geometry (lines → paragraphs, with first-line and hanging indents, inline-formula fragments, hyphenation; formulas, figure labels and author lines are skipped) and covers each paragraph with a box in the sampled background and text colour holding the translation, shrinking the font to fit. Online PDFs are redirected with `declarativeNetRequest` response-header rules, the same way Mozilla's pdf.js extension does it (Chrome/Edge 128+).
 - **Security**: translations are inserted with `textContent`, never as HTML.
 
 ### Tech stack
 
-[WXT](https://wxt.dev) (Manifest V3, cross-browser incl. Safari) · [Svelte 5](https://svelte.dev) · TypeScript 6 · [Transformers.js](https://github.com/huggingface/transformers.js) v4 + WebGPU · [Mozilla Readability](https://github.com/mozilla/readability) · [@webext-core/messaging](https://webext-core.aklinker1.io/) · [idb](https://github.com/jakearchibald/idb) · [Lucide](https://lucide.dev) · Vitest · Playwright · ESLint · Prettier.
+[WXT](https://wxt.dev) (Manifest V3, cross-browser incl. Safari) · [Svelte 5](https://svelte.dev) · TypeScript 6 · [Transformers.js](https://github.com/huggingface/transformers.js) v4 + WebGPU · [Mozilla Readability](https://github.com/mozilla/readability) · [PDF.js](https://mozilla.github.io/pdf.js/) · [@webext-core/messaging](https://webext-core.aklinker1.io/) · [idb](https://github.com/jakearchibald/idb) · [Lucide](https://lucide.dev) · Vitest · Playwright · ESLint · Prettier.
 
 The UI uses modern native CSS (OKLCH colors, `light-dark()`, customizable `<select>`, `@starting-style`) rather than a CSS framework, because the in-page UI lives in Shadow DOM and extension pages only run in evergreen browsers.
 
@@ -179,7 +184,9 @@ The UI uses modern native CSS (OKLCH colors, `light-dark()`, customizable `<sele
 - [x] Per-site rules (point-and-click, include / exclude / CSS)
 - [x] YouTube bilingual subtitles
 - [ ] Subtitles on other video sites
-- [ ] PDF translation
+- [x] PDF translation (layout-preserving, in the browser)
+- [ ] Download the translated PDF
+- [ ] Optional AI layout model (e.g. DocLayout-YOLO on WebGPU) for complex PDFs
 
 ## Contributing
 

@@ -5,6 +5,8 @@ export type ProviderId = 'builtin' | 'local' | 'google' | 'azure' | 'deepl' | 'o
 export type TranslationStyle = 'plain' | 'faded' | 'underline' | 'highlight' | 'quote';
 /** smart：只译正文，跳过导航、菜单、按钮、页眉页脚等界面元素；all：页面上所有文字 */
 export type TranslateScope = 'smart' | 'all';
+/** PDF 阅读器的显示方式：原文和译文并排 / 只看译文 / 只看原文 */
+export type PdfMode = 'dual' | 'translation' | 'original';
 
 export interface OpenAISettings {
   baseUrl: string;
@@ -29,6 +31,8 @@ export interface Settings {
   floatBall: boolean;
   /** YouTube 双语字幕 */
   ytSubtitles: boolean;
+  /** PDF：在线 PDF 自动用 Bilingo 阅读器打开；阅读器的显示方式 */
+  pdf: { autoOpen: boolean; mode: PdfMode };
   autoSites: string[];
   openai: OpenAISettings;
   azure: { key: string; region: string };
@@ -49,6 +53,7 @@ export const DEFAULT_SETTINGS: Settings = {
   scope: 'smart',
   floatBall: true,
   ytSubtitles: false,
+  pdf: { autoOpen: false, mode: 'dual' },
   autoSites: [],
   siteRules: [],
   disabledBuiltinRules: [],

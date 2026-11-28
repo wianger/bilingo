@@ -11,6 +11,10 @@ interface ProtocolMap {
   localPrepare(): void;
   /** 设置页：卸载本地模型，释放显存 */
   localUnload(): void;
+  /** 内容脚本（浏览器自带的 PDF 查看器里）：在当前标签页用 Bilingo 阅读器打开这个 PDF */
+  openPdfViewer(data: { url: string }): void;
+  /** PDF 阅读器：改用浏览器自带的查看器打开（本标签页临时不再跳转） */
+  openPdfNative(data: { url: string }): void;
 
   // 后台 / 弹窗 → 内容脚本
   toggle(): { active: boolean };

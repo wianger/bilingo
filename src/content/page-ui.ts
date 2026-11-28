@@ -148,6 +148,9 @@ export class PageUI {
     document.addEventListener('keydown', (e) => e.key === 'Escape' && this.hideBubble());
   }
 
+  /** 悬浮球的提示文字（浏览器自带的 PDF 查看器里改为"用 Bilingo 打开"） */
+  ballTitle?: () => string;
+
   /** 按当前界面语言设置所有文字（切换语言时再次调用） */
   applyLabels() {
     const shadow = this.host.shadowRoot!;
@@ -156,7 +159,7 @@ export class PageUI {
       el.setAttribute('aria-label', label);
       el.setAttribute('title', title);
     };
-    set('.ball', m.ball_label(), m.ball_title());
+    set('.ball', this.ballTitle?.() ?? m.ball_label(), this.ballTitle?.() ?? m.ball_title());
     set('.copy', m.bubble_copy());
     set('.close', m.bubble_close());
     this.bubble.setAttribute('aria-label', m.bubble_label());

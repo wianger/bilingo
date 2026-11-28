@@ -441,6 +441,17 @@
             </div>
             <input type="checkbox" class="switch" bind:checked={s.ytSubtitles} />
           </label>
+
+          <label class="row">
+            <div>
+              <div>{m.opt_pdf()}</div>
+              <div class="muted">
+                {m.opt_pdf_desc()}
+                <a href="/pdf.html" target="_blank">{m.opt_pdf_local()}</a>
+              </div>
+            </div>
+            <input type="checkbox" class="switch" bind:checked={s.pdf.autoOpen} />
+          </label>
         </section>
 
         <section id="provider" class="card">

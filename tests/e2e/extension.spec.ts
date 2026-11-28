@@ -60,6 +60,47 @@ const ARTICLE_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"
   </div>
 </body></html>`;
 
+/** 生成一个只有文字的最小 PDF（Helvetica 11pt，行距 14pt，段落之间多空 12pt） */
+function makePdf(paragraphs: string[][]): Buffer {
+  let y = 740;
+  const ops = ['BT', '/F1 11 Tf'];
+  for (const lines of paragraphs) {
+    for (const line of lines) {
+      ops.push(`1 0 0 1 72 ${y} Tm (${line}) Tj`);
+      y -= 14;
+    }
+    y -= 12;
+  }
+  ops.push('ET');
+  const stream = ops.join('\n');
+  const objs = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
+  ];
+  let out = '%PDF-1.4\n';
+  const offsets: number[] = [];
+  objs.forEach((o, i) => {
+    offsets.push(out.length);
+    out += `${i + 1} 0 obj\n${o}\nendobj\n`;
+  });
+  const xref = out.length;
+  out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n`;
+  out += offsets.map((o) => `${String(o).padStart(10, '0')} 00000 n \n`).join('');
+  out += `trailer\n<< /Size ${objs.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  return Buffer.from(out, 'latin1');
+}
+
+const PDF_PARAGRAPHS = [
+  [
+    'Bilingo translates PDF documents while keeping the original layout of every page,',
+    'so figures and formulas stay where they are.',
+  ],
+  ['Each paragraph is replaced with its translation in the same place.'],
+];
+
 let server: Server;
 let origin = '';
 const llmRequests: { segments?: { id: number; text: string }[]; text?: string }[] = [];
@@ -97,6 +138,10 @@ test.beforeAll(async () => {
     if (req.url === '/page') {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
       return res.end(PAGE);
+    }
+    if (req.url === '/paper.pdf') {
+      res.writeHead(200, { 'content-type': 'application/pdf' });
+      return res.end(makePdf(PDF_PARAGRAPHS));
     }
     if (req.url === '/v1/chat/completions') {
       let body = '';
@@ -416,6 +461,54 @@ const YT_JSON3 = {
     { tStartMs: 5000, dDurationMs: 2000, segs: [{ utf8: 'about WebGPU.' }] },
   ],
 };
+
+test('PDF: online PDFs open in the Bilingo reader with the translation next to each page', async ({ context, sw }) => {
+  await sw.evaluate(async (baseUrl) => {
+    await chrome.storage.local.set({
+      settings: {
+        uiLang: 'en',
+        provider: 'openai',
+        targetLang: 'zh-CN',
+        openai: { baseUrl, apiKey: 'test', model: 'mock' },
+        pdf: { autoOpen: true, mode: 'dual' },
+      },
+    });
+  }, `${origin}/v1`);
+  // 设置变化后后台注册跳转规则
+  await expect
+    .poll(() =>
+      sw.evaluate(async () => {
+        const dnr = (
+          globalThis as unknown as { chrome: { declarativeNetRequest: { getDynamicRules(): Promise<unknown[]> } } }
+        ).chrome.declarativeNetRequest;
+        return (await dnr.getDynamicRules()).length;
+      }),
+    )
+    .toBeGreaterThan(0);
+
+  const page = await context.newPage();
+  await page.goto(`${origin}/paper.pdf`);
+  await expect(page).toHaveURL(/\/pdf\.html\?DNR:http/);
+
+  // 两个段落各自被同位置的译文覆盖
+  const blocks = page.locator('.bl-pane .bl-block');
+  await expect(blocks).toHaveCount(2);
+  await expect(blocks.first()).toHaveText(fakeTranslate(PDF_PARAGRAPHS[0]!.join(' ')));
+  await expect(blocks.nth(1)).toHaveText(fakeTranslate(PDF_PARAGRAPHS[1]![0]!));
+  await expect(page.locator('.status')).toContainText('1 pages translated');
+
+  // 译文页在原文页右侧
+  const pageBox = (await page.locator('.pdfViewer .page').first().boundingBox())!;
+  const paneBox = (await page.locator('.bl-pane').first().boundingBox())!;
+  expect(paneBox.x).toBeGreaterThan(pageBox.x + pageBox.width - 1);
+  expect(Math.abs(paneBox.width - pageBox.width)).toBeLessThan(2);
+
+  // 只看原文：译文页隐藏
+  await page.getByRole('radio', { name: 'Original' }).click();
+  await expect(page.locator('.bl-pane').first()).toBeHidden();
+  await page.getByRole('radio', { name: 'Side by side' }).click();
+  await expect(page.locator('.bl-pane').first()).toBeVisible();
+});
 
 test('YouTube: bilingual subtitles from the player caption request', async ({ sw }) => {
   // 自签名证书，让 www.youtube.com 指向本地 HTTPS 服务器

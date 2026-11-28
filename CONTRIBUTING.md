@@ -63,6 +63,7 @@ Decisions that are easy to get wrong:
 - **Chromium injects `body { font-size: 75% }`** into extension pages; `src/assets/ui.css` resets it.
 - **Microsoft Edge's free translate endpoint** (`edge.microsoft.com/translate/auth`) stopped working around August 2026; don't add it back.
 - **YouTube captions** require a proof-of-origin token (`pot`) since 2025; fetching `/api/timedtext` without it returns an empty 200. `youtube-main.content.ts` runs in the page's main world at `document_start`, captures the player's own request and hands the URL to the isolated content script. Headless browsers don't get a valid token, so real-site checks need a headed browser; CI uses a local fake YouTube.
+- **PDF**: the reader is `src/entrypoints/pdf` + `src/pdf/viewer.ts`, built on pdf.js's `PDFViewer` component. pdf.js removes unknown children of a page div when it resets the page (zoom, scrolling out of the buffer), so the translated pane is re-attached on every `pagerendered` event. Paragraph detection (`src/pdf/layout.ts`) is pure and unit-tested; when changing it, check real papers (single-column, two-column, references with hanging indents, inline formulas). Online PDFs are redirected by `declarativeNetRequest` rules with `responseHeaders` conditions (Chrome/Edge 128+; older versions accept but ignore that field, so `src/pdf/redirect.ts` probes support first).
 - **Assets**: `assets/logo.svg` is the single source for the logo. Run `npm run icons` after editing it, and `npm run build && npm run screenshots` to refresh README images.
 
 ## License

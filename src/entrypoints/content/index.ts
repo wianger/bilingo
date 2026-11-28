@@ -1,7 +1,7 @@
 import { m, setUiLang } from '@/shared/i18n';
 import { PageTranslator, translateBatch } from '@/content/page-translator';
 import { PageUI } from '@/content/page-ui';
-import { onMessage } from '@/shared/messaging';
+import { onMessage, sendMessage } from '@/shared/messaging';
 import { DEFAULT_SETTINGS, getSettings, saveSettings, watchSettings, type Settings } from '@/shared/settings';
 import { ElementPicker, type PickAction } from '@/content/picker';
 import './style.css';
@@ -19,6 +19,9 @@ export default defineContentScript({
     // 防止按需注入时重复初始化
     if (window.__bilingoLoaded) return;
     window.__bilingoLoaded = true;
+
+    // 浏览器自带的 PDF 查看器：网页翻译不适用，悬浮球 / 快捷键 / 弹窗改为用 Bilingo 阅读器打开
+    if (document.contentType === 'application/pdf') return setupPdfPage();
 
     let settings: Settings = DEFAULT_SETTINGS;
     const translator = new PageTranslator(() => settings);
@@ -109,3 +112,22 @@ export default defineContentScript({
     if (settings.autoSites.includes(location.hostname)) translator.start();
   },
 });
+
+async function setupPdfPage() {
+  const open = () => void sendMessage('openPdfViewer', { url: location.href });
+  const ui = new PageUI(open);
+  ui.ballTitle = () => m.pdf_ball_title();
+  onMessage('toggle', () => {
+    open();
+    return { active: false };
+  });
+  onMessage('status', () => ({ active: false }));
+  const settings = await getSettings();
+  setUiLang(settings.uiLang);
+  ui.applyLabels();
+  ui.setBall(settings.floatBall, false);
+  watchSettings((next) => {
+    if (setUiLang(next.uiLang)) ui.applyLabels();
+    ui.setBall(next.floatBall, false);
+  });
+}

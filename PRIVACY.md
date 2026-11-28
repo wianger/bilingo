@@ -11,7 +11,7 @@ Bilingo has **no server** and collects **no analytics, telemetry or personal dat
 - **Page text** is sent only when you translate, and only to the engine you selected, directly from your browser:
   - **Browser built-in AI** and **local LLM**: text never leaves your device. The local LLM downloads model files from Hugging Face or the mirror you selected; no page text is sent.
   - **OpenAI-compatible API, Azure, DeepL, Google**: text is sent to that provider and is subject to its privacy policy.
-- **Permissions**: `<all_urls>` and `scripting` are needed to translate any page you open and to call the API endpoint you configure; `storage` keeps your settings; `activeTab` lets the toolbar popup talk to the current tab; `contextMenus` adds the selection-translation menu; `offscreen` hosts the local model.
+- **Permissions**: `<all_urls>` and `scripting` are needed to translate any page you open and to call the API endpoint you configure; `storage` keeps your settings; `activeTab` lets the toolbar popup talk to the current tab; `contextMenus` adds the selection-translation menu; `offscreen` hosts the local model; `declarativeNetRequestWithHostAccess` opens online PDFs in Bilingo's reader when you enable that setting (it matches PDF responses by their headers and redirects; it doesn't read or modify pages). The reader downloads the PDF directly from the site, like the browser would.
 
 ## 简体中文
 
@@ -22,4 +22,4 @@ Bilingo **没有服务器**，**不收集任何统计、遥测或个人数据**�
 - **网页文字**只在你翻译时、只发给你选择的引擎，并且由浏览器直接发送：
   - **浏览器内置 AI** 和 **本地大模型**：文字不会离开你的设备。本地大模型会从 Hugging Face 或你选择的镜像下载模型文件，不会发送网页文字。
   - **OpenAI 兼容接口、Azure、DeepL、谷歌**：文字会发给对应服务商，受其隐私政策约束。
-- **权限说明**：`<all_urls>` 和 `scripting` 用于翻译你打开的任意网页、调用你配置的接口；`storage` 用于保存设置；`activeTab` 用于工具栏弹窗与当前标签页通信；`contextMenus` 用于划词翻译菜单；`offscreen` 用于运行本地模型。
+- **权限说明**：`<all_urls>` 和 `scripting` 用于翻译你打开的任意网页、调用你配置的接口；`storage` 用于保存设置；`activeTab` 用于工具栏弹窗与当前标签页通信；`contextMenus` 用于划词翻译菜单；`offscreen` 用于运行本地模型；`declarativeNetRequestWithHostAccess` 用于在你开启相应设置后，用 Bilingo 阅读器打开在线 PDF（按响应头识别 PDF 并重定向，不读取、不修改网页）。阅读器直接从网站下载 PDF，和浏览器自己打开时一样。

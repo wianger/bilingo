@@ -6,6 +6,7 @@ import { onMessage } from '@/shared/messaging';
 import { m, setUiLang } from '@/shared/i18n';
 import { getSettings, watchSettings } from '@/shared/settings';
 import { sendToTab } from '@/shared/tabs';
+import { openNative, syncPdfRedirect, viewerUrlFor } from '@/pdf/redirect';
 
 export default defineBackground(() => {
   onMessage('translate', ({ data }) => translateTexts(data.texts, data.override));
@@ -17,11 +18,30 @@ export default defineBackground(() => {
   });
   onMessage('localUnload', () => closeOffscreen());
   onMessage('llmIdle', () => closeOffscreen());
+  // 发消息的标签页（内容脚本或阅读器页面所在的标签页）
+  const tabOf = (sender: unknown) => (sender as { tab?: { id?: number } }).tab?.id;
+  onMessage('openPdfViewer', async ({ data, sender }) => {
+    const tabId = tabOf(sender);
+    if (tabId !== undefined) await browser.tabs.update(tabId, { url: viewerUrlFor(data.url) });
+  });
+  onMessage('openPdfNative', async ({ data, sender }) => {
+    const tabId = tabOf(sender);
+    if (tabId !== undefined) await openNative(tabId, data.url);
+  });
 
   // 界面语言（错误信息、右键菜单）跟随设置
-  const ready = getSettings().then((s) => setUiLang(s.uiLang));
+  const ready = getSettings().then((s) => {
+    setUiLang(s.uiLang);
+    pdfAuto = s.pdf.autoOpen;
+    void syncPdfRedirect(pdfAuto).catch(() => {});
+  });
+  let pdfAuto = false;
   watchSettings((s) => {
     if (setUiLang(s.uiLang)) void updateMenuTitles();
+    if (s.pdf.autoOpen !== pdfAuto) {
+      pdfAuto = s.pdf.autoOpen;
+      void syncPdfRedirect(pdfAuto).catch(() => {});
+    }
   });
 
   browser.runtime.onInstalled.addListener(() => void setupMenus());

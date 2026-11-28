@@ -1,0 +1,264 @@
+/* Bilingo PDF 阅读器 */
+:root {
+  --toolbar-h: 48px;
+}
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ---------- 工具栏 ---------- */
+.toolbar {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 10;
+  height: var(--toolbar-h);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 10px 0 14px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 0 1 280px;
+  font-weight: 600;
+}
+.brand .name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.group.end {
+  margin-left: auto;
+}
+.sep {
+  width: 1px;
+  height: 20px;
+  margin: 0 8px;
+  background: var(--border);
+}
+.page-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.page-input {
+  width: 48px;
+  height: 30px;
+  padding: 0 6px;
+  text-align: center;
+}
+.zoom {
+  min-width: 58px;
+  font-variant-numeric: tabular-nums;
+}
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.segmented {
+  display: flex;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+.segmented button {
+  border: 0;
+  padding: 4px 12px;
+  border-radius: 7px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background 0.15s var(--ease),
+    color 0.15s var(--ease);
+}
+.segmented button:hover {
+  color: var(--fg);
+}
+.segmented button.on {
+  color: var(--fg);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+}
+.status > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* ---------- 空白页：拖放 / 选择文件 ---------- */
+.empty {
+  position: fixed;
+  inset: var(--toolbar-h) 0 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.empty.dragging .drop {
+  box-shadow: var(--ring);
+}
+.drop {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  max-width: 440px;
+  padding: 36px 40px;
+  text-align: center;
+  border: 1.5px dashed var(--border-strong);
+}
+.drop h1 {
+  font-size: 18px;
+}
+
+/* ---------- pdf.js 阅读区 ---------- */
+#viewerContainer {
+  position: absolute;
+  inset: var(--toolbar-h) 0 0;
+  overflow: auto;
+  background: light-dark(oklch(0.93 0.006 274), oklch(0.2 0.008 274));
+}
+#viewerContainer.hidden {
+  visibility: hidden;
+}
+#viewerContainer .pdfViewer {
+  padding: 12px 0 20px;
+}
+.pdfViewer .page {
+  box-shadow: 0 1px 3px oklch(0.2 0.02 274 / 0.18);
+  background-clip: padding-box;
+  border: 0;
+  margin: 0 auto 14px;
+}
+
+/* 并排：原文页靠左，译文页在右侧 */
+.mode-dual .pdfViewer .page {
+  margin-left: var(--bl-left, auto);
+  margin-right: 0;
+}
+.mode-dual .pdfViewer {
+  /* 让滚动区域包含右侧的译文页 */
+  padding-right: calc(var(--bl-gap, 16px) * 2);
+}
+
+.bl-pane {
+  position: absolute;
+  top: 0;
+  left: calc(100% + var(--bl-gap, 16px));
+  width: 100%;
+  height: 100%;
+  background: #fff;
+  box-shadow: 0 1px 3px oklch(0.2 0.02 274 / 0.18);
+  color-scheme: light;
+}
+.bl-pane > canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+/* 只看译文：译文页盖住原文页 */
+.mode-translation .bl-pane {
+  left: 0;
+  z-index: 20;
+}
+.mode-original .bl-pane {
+  display: none;
+}
+
+/* 译文段落：盖住原文段落，字号随页面缩放 */
+.bl-block {
+  position: absolute;
+  box-sizing: border-box;
+  padding: calc(var(--total-scale-factor) * 1px);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI Variable Text',
+    'PingFang SC',
+    'Microsoft YaHei UI',
+    'Noto Sans CJK SC',
+    sans-serif;
+  font-size: calc(var(--total-scale-factor) * var(--bl-size) * var(--bl-fit, 1));
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+  white-space: normal;
+  cursor: text;
+  user-select: text;
+  border-radius: calc(var(--total-scale-factor) * 1px);
+}
+.bl-block.bl-hover {
+  outline: calc(var(--total-scale-factor) * 1.2px) solid oklch(0.6 0.2 274 / 0.8);
+  outline-offset: calc(var(--total-scale-factor) * 1px);
+}
+.bl-src-hl {
+  position: absolute;
+  z-index: 6;
+  pointer-events: none;
+  border-radius: calc(var(--total-scale-factor) * 2px);
+  background: oklch(0.6 0.2 274 / 0.1);
+  outline: calc(var(--total-scale-factor) * 1.2px) solid oklch(0.6 0.2 274 / 0.8);
+}
+
+.bl-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  max-width: calc(100% - 20px);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font:
+    12px/1.4 system-ui,
+    sans-serif;
+  color: #fff;
+  background: oklch(0.45 0.15 274 / 0.88);
+  box-shadow: 0 2px 8px oklch(0.2 0.04 274 / 0.25);
+}
+.bl-badge.loading::before {
+  content: '';
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: #fff;
+  animation: bl-pulse 1s ease-in-out infinite alternate;
+}
+.bl-badge.error {
+  background: oklch(0.5 0.19 25 / 0.92);
+}
+@keyframes bl-pulse {
+  from {
+    opacity: 0.3;
+  }
+  to {
+    opacity: 1;
+  }
+}
